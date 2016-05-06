@@ -1,5 +1,5 @@
 {
-  "name": "backbone-sql",
+  "name": "fl-backbone-sql",
   "version": "0.7.0",
   "description": "PostgreSQL, MySQL, and SQLite3 storage for BackboneORM",
   "main": "./lib/index.js",

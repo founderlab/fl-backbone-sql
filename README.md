@@ -34,7 +34,7 @@ These options may be applied to any field. Note that column options are currentl
 ###### CoffeeScript schema example
 
 ```coffeescript
-SQLSync = require('backbone-sql').sync
+SQLSync = require('fl-backbone-sql').sync
 
 class Project extends Backbone.Model
 
@@ -54,7 +54,7 @@ class Project extends Backbone.Model
 ###### JavaScript schema example
 
 ```javascript
-var SQLSync = require('backbone-sql').sync;
+var SQLSync = require('fl-backbone-sql').sync;
 
 var Project = Backbone.Model.extend({
 
