@@ -41,7 +41,7 @@ _appendCondition = (conditions, key, value) ->
   # Transform a conditional of type {key: {$like: 'string'}} to ('key', 'like', '%string%')
   else if _.isObject(value) and value.$like
     test_str = if '%' in value.$like then value.$like else "%#{value.$like}%"
-    conditions.where_conditionals.push({key, operator: 'like', value: test_str})
+    conditions.where_conditionals.push({key, operator: 'ilike', value: test_str})
 
   else
     conditions.wheres.push({key: key, value: value})
@@ -72,7 +72,7 @@ _appendWhere = (query, conditions, table) ->
 
   for condition in conditions.where_conditionals
     if condition.operations
-      query.where ->
+      do (condition) -> query.where ->
         operation = condition.operations.pop()
         nested_query = @
         _appendConditionalWhere(nested_query, condition.key, operation, table, false)
@@ -124,7 +124,6 @@ module.exports = class SqlCursor extends sync.Cursor
 
   queryToJSON: (callback) ->
     return callback(null, if @hasCursorQuery('$one') then null else []) if @hasCursorQuery('$zero')
-
     try
       query = @connection(@model_type.tableName())
       @_conditions = @_parseConditions(@_find, @_cursor)
@@ -140,11 +139,11 @@ module.exports = class SqlCursor extends sync.Cursor
       @_cursor.$sort = if _.isArray(@_cursor.$sort) then @_cursor.$sort else [@_cursor.$sort]
 
     if @_cursor.$values
-      $fields = if @_cursor.$white_list then _.intersection(@_cursor.$values, @_cursor.$white_list) else @_cursor.$values
+      $fields = if @_cursor.$whitelist then _.intersection(@_cursor.$values, @_cursor.$whitelist) else @_cursor.$values
     else if @_cursor.$select
-      $fields = if @_cursor.$white_list then _.intersection(@_cursor.$select, @_cursor.$white_list) else @_cursor.$select
-    else if @_cursor.$white_list
-      $fields = @_cursor.$white_list
+      $fields = if @_cursor.$whitelist then _.intersection(@_cursor.$select, @_cursor.$whitelist) else @_cursor.$select
+    else if @_cursor.$whitelist
+      $fields = @_cursor.$whitelist
 
     # This implementation uses a postgres window function when there are columns other than the $unique fields requested
     # TODO: implementation that works for all dbs
