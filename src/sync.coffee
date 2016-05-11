@@ -55,7 +55,7 @@ class SqlSync
 
   # @no_doc
   create: (model, options) =>
-    json = model.toJSON()
+    json = @parseJSON(model.toJSON())
     @getTable('master').insert(json, 'id').exec (err, res) =>
       return options.error(err) if err
       return options.error(new Error("Failed to create model with attributes: #{JSONUtils.stringify(model.attributes)}")) unless res?.length
@@ -64,9 +64,9 @@ class SqlSync
 
   # @no_doc
   update: (model, options) =>
-    json = model.toJSON()
+    json = @parseJSON(model.toJSON())
     @getTable('master').where('id', model.id).update(json).exec (err, res) =>
-      return options.error(model, err) if err
+      return options.error(err) if err
       options.success(json)
 
   # @nodoc
@@ -81,6 +81,11 @@ class SqlSync
   ###################################
   # Backbone ORM - Class Extensions
   ###################################
+
+  parseJSON: (json) ->
+    for key, value of @schema.fields when value.type?.toLowerCase() is 'json' and json[key]
+      json[key] = JSON.stringify(json[key])
+    return json
 
   # @no_doc
   resetSchema: (options, callback) -> @db().resetSchema(options, callback)

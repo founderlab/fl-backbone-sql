@@ -108,6 +108,9 @@ module.exports = class DatabaseTools
       if column_info.type in ['float', 'decimal']
         column_args[1] = constructor_options['precision']
         column_args[2] = constructor_options['scale']
+     # Use jsonb
+      else if column_info.type in ['json']
+        column_args[1] = true
       # Assume we've been given one valid argument
       else
         column_args[1] = _.values(constructor_options)[0]
