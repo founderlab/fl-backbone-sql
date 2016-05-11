@@ -8,6 +8,12 @@
 
 module.exports = class SqlBackboneAdapter
   @nativeToAttributes: (json, schema) ->
-    for key of json
-      json[key] = !!json[key] if json[key] isnt null and schema.fields[key] and schema.fields[key].type is 'Boolean'
+    for key, value of schema.fields
+      if schema.fields[key] and schema.fields[key].type is 'Boolean' and json[key] isnt null
+        json[key] = !!json[key]
+      else if value.type?.toLowerCase() is 'json' and json[key]
+        try
+          json[key] = JSON.parse(json[key])
+        catch err
+          # console.log(err)
     return json
