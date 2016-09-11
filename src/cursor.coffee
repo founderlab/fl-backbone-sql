@@ -15,13 +15,12 @@ COMPARATORS =
   $ne: '!='
 COMPARATOR_KEYS = _.keys(COMPARATORS)
 
-_appendCondition = (conditions, key, value) ->
-
+_appendCondition = (conditions, key, value, method='where') ->
   if value?.$in
-    if value.$in?.length then conditions.wheres.push({method: 'whereIn', key: key, value: value.$in}) else (conditions.abort = true; return conditions)
+    if value.$in?.length then conditions.wheres.push({key, method: 'whereIn', value: value.$in}) else (conditions.abort = true; return conditions)
 
   else if value?.$nin
-    if value.$nin?.length then conditions.wheres.push({method: 'whereNotIn', key: key, value: value.$nin})
+    if value.$nin?.length then conditions.wheres.push({key, method: 'whereNotIn', value: value.$nin})
 
   else if value?.$exists?
     conditions.wheres.push({method: (if value?.$exists then 'whereNotNull' else 'whereNull'), key: key})
@@ -34,17 +33,24 @@ _appendCondition = (conditions, key, value) ->
       throw new Error "Unexpected null with query key '#{key}' operator '#{operator}'" if _.isNull(value) and (operator isnt '$ne')
       operations.push({operator: COMPARATORS[mongo_op], value: parameter})
     if ops_length is 1
-      conditions.where_conditionals.push(_.extend(operations[0], {key: key}))
+      conditions.where_conditionals.push(_.extend(operations[0], {key}))
     else
-      conditions.where_conditionals.push({key: key, operations: operations})
+      conditions.where_conditionals.push({key, operations})
 
   # Transform a conditional of type {key: {$like: 'string'}} to ('key', 'like', '%string%')
   else if _.isObject(value) and value.$like
     test_str = if '%' in value.$like then value.$like else "%#{value.$like}%"
-    conditions.where_conditionals.push({key, operator: 'ilike', value: test_str})
+    conditions.where_conditionals.push({key, method, operator: 'ilike', value: test_str})
 
-  else
-    conditions.wheres.push({key: key, value: value})
+  else if method is 'where'
+    method = 'whereNull' if _.isNull(value)
+    conditions.wheres.push({key, value, method})
+
+  else if method is 'orWhere'
+    method = 'orWhereNull' if _.isNull(value)
+    console.log('OR', {key, value, method})
+    conditions.or_wheres.push({key, value, method})
+
   return conditions
 
 _columnName = (col, table) -> if table then "#{table}.#{col}" else col
@@ -61,15 +67,34 @@ _appendConditionalWhere = (query, key, condition, table, compound) ->
   else
     query[whereMethod](_columnName(key, table), condition.operator, condition.value)
 
+# Make conditions flat list of condition objects {field, mehod, operator, value}
+# Each condition can contain a conditions array
+# Each item in nested conditions array has its own field key
+# Recurse to add nested conditions
+# Each condition starts its own where block if it had subconditions
+# $or has a conditions array with potentially different keys on each condition
+
 _appendWhere = (query, conditions, table) ->
   for condition in conditions.wheres
-    if condition.method
-      query[condition.method](_columnName(condition.key, table), condition.value)
-    else if _.isNull(condition.value)
-      query.whereNull(_columnName(condition.key, table))
-    else
-      query.where(_columnName(condition.key, table), condition.value)
+    query[condition.method](_columnName(condition.key, table), condition.value)
 
+  # Bundle the or wheres up together as they'll come from one $or prop
+  # SQL should look like `where (prop1 = val1 or prop2 = val2)`
+  console.log('conditions1', conditions.or_wheres)
+  if conditions.or_wheres.length
+    query.where ->
+      nested_query = @
+      # console.log('conditions222', conditions.or_wheres)
+      # condition = conditions.or_wheres.shift()
+      # console.log('condition', condition)
+      # console.log('conditions333', conditions.or_wheres)
+      # console.log('condition.method', condition.method)
+      # nested_query[condition.method](_columnName(condition.key, table), condition.value)
+      for condition in conditions.or_wheres
+        console.log('condition.method inner', condition.method)
+        nested_query[condition.method](_columnName(condition.key, table), condition.value)
+
+  # Handling `where something > someValue`
   for condition in conditions.where_conditionals
     if condition.operations
       do (condition) -> query.where ->
@@ -78,8 +103,10 @@ _appendWhere = (query, conditions, table) ->
         _appendConditionalWhere(nested_query, condition.key, operation, table, false)
         for operation in condition.operations
           _appendConditionalWhere(nested_query, condition.key, operation, table, true)
+
     else if _.isNull(condition.value)
       query.whereNotNull(_columnName(condition.key, table))
+
     else
       _appendConditionalWhere(query, condition.key, condition, table, false)
 
@@ -91,11 +118,12 @@ _extractCount = (count_json) ->
   return +(count_info[if count_info.hasOwnProperty('count(*)') then 'count(*)' else 'count'])
 
 module.exports = class SqlCursor extends sync.Cursor
-  verbose: false
+  # verbose: false
+  verbose: true
 
-  _parseConditions: (find, cursor) ->
-    conditions = {wheres: [], where_conditionals: [], related_wheres: {}, joined_wheres: {}}
+  _parseConditions: (find, cursor, conditions={wheres: [], or_wheres: [], where_conditionals: [], related_wheres: {}, joined_wheres: {}}, method='where') ->
     related_wheres = {}
+
     for key, value of find
       throw new Error "Unexpected undefined for query key '#{key}'" if _.isUndefined(value)
 
@@ -109,12 +137,16 @@ module.exports = class SqlCursor extends sync.Cursor
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
         relation = reverse_relation.reverse_relation
         conditions.joined_wheres[relation.key] or= {wheres: [], where_conditionals: []}
-        _appendCondition(conditions.joined_wheres[relation.key], key, value)
+        _appendCondition(conditions.joined_wheres[relation.key], key, value, method)
       else
-        _appendCondition(conditions, key, value)
+        _appendCondition(conditions, key, value, method)
 
     # Parse conditions on related models in the same way
     conditions.related_wheres[relation] = @_parseConditions(related_conditions) for relation, related_conditions of related_wheres
+
+    if cursor?.$or
+      for cond in cursor.$or
+        @_parseConditions(cond, {}, conditions, 'orWhere')
 
     if cursor?.$ids
       (conditions.abort = true; return conditions) unless cursor.$ids.length
