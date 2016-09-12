@@ -6,6 +6,7 @@
 
 Knex = require 'knex'
 {_, sync} = require 'backbone-orm'
+SqlAst = require './ast'
 
 COMPARATORS =
   $lt: '<'
@@ -67,31 +68,18 @@ _appendConditionalWhere = (query, key, condition, table, compound) ->
   else
     query[whereMethod](_columnName(key, table), condition.operator, condition.value)
 
-# Make conditions flat list of condition objects {field, mehod, operator, value}
-# Each condition can contain a conditions array
-# Each item in nested conditions array has its own field key
-# Recurse to add nested conditions
-# Each condition starts its own where block if it had subconditions
-# $or has a conditions array with potentially different keys on each condition
-
 _appendWhere = (query, conditions, table) ->
   for condition in conditions.wheres
     query[condition.method](_columnName(condition.key, table), condition.value)
 
   # Bundle the or wheres up together as they'll come from one $or prop
   # SQL should look like `where (prop1 = val1 or prop2 = val2)`
-  console.log('conditions1', conditions.or_wheres)
+  # console.log('conditions1', conditions.or_wheres, conditions)
   if conditions.or_wheres.length
     query.where ->
       nested_query = @
-      # console.log('conditions222', conditions.or_wheres)
-      # condition = conditions.or_wheres.shift()
-      # console.log('condition', condition)
-      # console.log('conditions333', conditions.or_wheres)
-      # console.log('condition.method', condition.method)
-      # nested_query[condition.method](_columnName(condition.key, table), condition.value)
       for condition in conditions.or_wheres
-        console.log('condition.method inner', condition.method)
+        # console.log('condition.method inner', condition.method)
         nested_query[condition.method](_columnName(condition.key, table), condition.value)
 
   # Handling `where something > someValue`
@@ -118,8 +106,8 @@ _extractCount = (count_json) ->
   return +(count_info[if count_info.hasOwnProperty('count(*)') then 'count(*)' else 'count'])
 
 module.exports = class SqlCursor extends sync.Cursor
-  # verbose: false
-  verbose: true
+  verbose: false
+  # verbose: true
 
   _parseConditions: (find, cursor, conditions={wheres: [], or_wheres: [], where_conditionals: [], related_wheres: {}, joined_wheres: {}}, method='where') ->
     related_wheres = {}
@@ -136,7 +124,7 @@ module.exports = class SqlCursor extends sync.Cursor
       # Many to Many relationships may be queried on the foreign key of the join table
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
         relation = reverse_relation.reverse_relation
-        conditions.joined_wheres[relation.key] or= {wheres: [], where_conditionals: []}
+        conditions.joined_wheres[relation.key] or= {wheres: [], or_wheres: [], where_conditionals: []}
         _appendCondition(conditions.joined_wheres[relation.key], key, value, method)
       else
         _appendCondition(conditions, key, value, method)
@@ -156,10 +144,28 @@ module.exports = class SqlCursor extends sync.Cursor
 
   queryToJSON: (callback) ->
     return callback(null, if @hasCursorQuery('$one') then null else []) if @hasCursorQuery('$zero')
+
+
+# Special cases: $zero, $count, $exists, $unique?
+
+    ###
+    ###
+    console.log()
+    console.log()
+    console.log()
+    ast = new SqlAst()
+    ast.parse({
+      find: @_find,
+      cursor: @_cursor,
+      model_type: @model_type,
+    })
+    ast.print()
+
+
     try
       query = @connection(@model_type.tableName())
       @_conditions = @_parseConditions(@_find, @_cursor)
-
+      console.dir(@_conditions, {depth: null, colors: true})
       # $in : [] or another query that would result in an empty result set in mongo has been given
       return callback(null, if @_cursor.$count then 0 else (if @_cursor.$one then null else [])) if @_conditions.abort
 

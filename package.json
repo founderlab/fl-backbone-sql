@@ -50,16 +50,16 @@
     "gulp-coffee": "*",
     "gulp-spawn-mocha": "*",
     "gulp-util": "*",
-    "mocha": "*",
+    "mocha": "2.x",
     "mysql": "2.x",
     "pg": "4.x",
     "sqlite3": "3.x",
     "supertest": "0.13.x"
   },
   "dependencies": {
-    "underscore": "1.x",
     "backbone": "1.x",
     "backbone-orm": "0.7.x",
-    "knex": "0.6.x"
+    "knex": "0.6.x",
+    "lodash": "^4.15.0"
   }
 }
