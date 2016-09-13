@@ -16,11 +16,6 @@ COMPARATORS =
   $ne: '!='
 COMPARATOR_KEYS = _.keys(COMPARATORS)
 
-_extractCount = (count_json) ->
-  return 0 unless count_json?.length
-  count_info = count_json[0]
-  return +(count_info[if count_info.hasOwnProperty('count(*)') then 'count(*)' else 'count'])
-
 _appendCondition = (conditions, key, value, method='where') ->
   if value?.$in
     if value.$in?.length then conditions.wheres.push({key, method: 'whereIn', value: value.$in}) else (conditions.abort = true; return conditions)
@@ -105,62 +100,10 @@ _appendWhere = (query, conditions, table) ->
 
   return query
 
-
-###
-New
-###
-
-_appendWhereAst = (query, condition) ->
-  # console.log('Building', condition)
-
-  if !_.isUndefined(condition.key)
-    if condition.operator
-      query[condition.method](condition.key, condition.operator, condition.value)
-    else
-      query[condition.method](condition.key, condition.value)
-
-  else if condition.conditions?.length
-    query[condition.method] ->
-      sub_query = @
-      for c in condition.conditions
-        _appendWhereAst(sub_query, c)
-
-  # console.log('query', query.toString())
-  return query
-
-_parseSortField = (sort) ->
-  if sort[0] is '-'
-    dir = 'desc'
-    col = sort.substr(1)
-  else
-    dir = 'asc'
-    col = sort
-  return [col, dir]
-
-_appendSelect = (query, model_type, fields) ->
-  query.select(_prefixColumns(model_type, fields))
-  return query
-
-_appendSort = (query, sort_fields) ->
-  return query unless sort_fields
-  for sort in sort_fields
-    [col, dir] = _parseSortField(sort)
-    query.orderBy(col, dir)
-  return query
-
-_tablePrefix = (model_type) -> "#{model_type.tableName()}_"
-
-_prefixColumns = (model_type, fields) ->
-  columns = if fields then _.clone(fields) else model_type.schema().columns()
-  columns.push('id') unless 'id' in columns
-  return ("#{model_type.tableName()}.#{col} as #{_tablePrefix(model_type)}#{col}" for col in columns)
-
-
-buildQueryFromAst = (query, ast) ->
-  _appendWhereAst(query, ast.where)
-  _appendSelect(query, ast.model_type, ast.fields)
-  _appendSort(query, ast.sort)
-  return query
+_extractCount = (count_json) ->
+  return 0 unless count_json?.length
+  count_info = count_json[0]
+  return +(count_info[if count_info.hasOwnProperty('count(*)') then 'count(*)' else 'count'])
 
 module.exports = class SqlCursor extends sync.Cursor
   verbose: false
@@ -202,37 +145,31 @@ module.exports = class SqlCursor extends sync.Cursor
   queryToJSON: (callback) ->
     return callback(null, if @hasCursorQuery('$one') then null else []) if @hasCursorQuery('$zero')
 
+
+# Special cases: $zero, $count, $exists, $unique?
+
+    ###
+    ###
+    console.log()
+    console.log()
+    console.log()
+    ast = new SqlAst()
+    ast.parse({
+      find: @_find,
+      cursor: @_cursor,
+      model_type: @model_type,
+    })
+    ast.print()
+
+
     try
+      query = @connection(@model_type.tableName())
       @_conditions = @_parseConditions(@_find, @_cursor)
+      console.dir(@_conditions, {depth: null, colors: true})
       # $in : [] or another query that would result in an empty result set in mongo has been given
       return callback(null, if @_cursor.$count then 0 else (if @_cursor.$one then null else [])) if @_conditions.abort
 
-      # Special cases: $zero, $count, $exists, $unique?
-      ###
-      ###
-      console.log()
-      console.log()
-      console.log()
-      ast = new SqlAst()
-      ast.parse({
-        find: @_find,
-        cursor: @_cursor,
-        model_type: @model_type,
-      })
-      ast.print()
-      console.log('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-      console.dir(@_conditions, {depth: null, colors: true})
-      console.log('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-
-      console.log()
-      console.log()
-
-      console.log('========================query=========================')
-      query = @connection(@model_type.tableName())
-      query = buildQueryFromAst(query, ast)
-      @joined = true
-      console.dir(query.toString(), {depth: null, colors: true})
-
+      _appendWhere(query, @_conditions, @model_type.tableName())
     catch err
       return callback("Query failed for model: #{@model_type.model_name} with error: #{err}")
 
@@ -317,22 +254,9 @@ module.exports = class SqlCursor extends sync.Cursor
     # Append where conditions and join if needed for the form `manytomanyrelation_id.field = value`
     @_appendJoinedWheres(query)
 
-
-    if true
-      console.log('=======================query_old=======================')
-      query_old = @connection(@model_type.tableName())
-      _appendWhere(query_old, @_conditions, @model_type.tableName())
-
-      $columns or= if @joined then @_prefixColumns(@model_type, $fields) else @_columns(@model_type, $fields)
-      query_old.select($columns)
-      @_appendSort(query_old)
-
-      console.dir(query_old.toString(), {depth: null, colors: true})
-      console.log('=======================================================')
-
-      console.log()
-      console.log()
-
+    $columns or= if @joined then @_prefixColumns(@model_type, $fields) else @_columns(@model_type, $fields)
+    query.select($columns)
+    @_appendSort(query)
     @_exec query, callback
 
   _exec: (query, callback) =>

@@ -68,11 +68,14 @@ tree = {
 # Each condition starts its own where block if it had subconditions
 # $or has a conditions array with potentially different keys on each condition
 
+columnName = (col, table) -> if table then "#{table}.#{col}" else col
+
 module.exports = class SqlAst
 
   constructor: ->
     @select = []
     @where = {
+      method: 'where',
       conditions: [],
     }
     @join = {}
@@ -114,10 +117,11 @@ module.exports = class SqlAst
     else if @cursor.$whitelist
       @fields = @cursor.$whitelist
 
-    @_parse(@query)
+    @_parse(@query, {table: @model_type.tableName()})
 
   # Internal parse method that recursively parses the query
   _parse: (query, options={}) ->
+    table = options.table
 
     for key, value of query when key[0] isnt '$'
       throw new Error "Unexpected undefined for query key '#{key}'" if _.isUndefined(value)
@@ -131,7 +135,7 @@ module.exports = class SqlAst
         @parseManyToManyRelation(key, value, reverse_relation)
 
       else
-        cond = @parseCondition(key, value, {method: options.method})
+        cond = @parseCondition(key, value, {table, method: options.method})
         @where.conditions.push(cond)
 
     # Parse conditions on related models in the same way
@@ -139,15 +143,17 @@ module.exports = class SqlAst
     #   conditions.related_wheres[relation] = @_parseConditions(related_conditions)
 
     if query?.$ids
-      cond = @parseCondition(key: 'id', value: query.$ids, {method: 'whereIn'})
+      cond = @parseCondition(key: 'id', value: query.$ids, {table, method: 'whereIn'})
       @where.conditions.push(cond)
 
     if query?.$or
       for q in query.$or
-        @_parse(q, {method: 'orWhere'})
+        @_parse(q, {table, method: 'orWhere'})
 
   parseCondition: (key, value, options={}) ->
     method = options.method || 'where'
+    key = columnName(key, options.table)
+
     condition = {}
 
     if _.isObject(value)
@@ -167,11 +173,28 @@ module.exports = class SqlAst
         val = if '%' in value.$like then value.$like else "%#{value.$like}%"
         condition.conditions.push({key, method, operator: 'ilike', value: val})
 
-      # Transform a conditional of type {key: {$lt: 5}} to ('key', '<', 5)
+      # Transform a conditional of type {key: {$lt: 5, $gt: 3}} to [('key', '<', 5), ('key', '>', 3)]
       if _.size(mongo_conditions = _.pick(value, COMPARATOR_KEYS))
         for mongo_op, val of mongo_conditions
-          throw new Error "Unexpected null with query key '#{key}': '#{mongo_conditions}'" if _.isNull(val) and (mongo_op not in ['$ne', '$eq'])
-          condition.conditions.push({key, value: val, operator: COMPARATORS[mongo_op]})
+          operator = COMPARATORS[mongo_op]
+
+          if mongo_op is '$ne'
+            if _.isNull(val)
+              condition.conditions.push({key, method: "#{method}NotNull"})
+            else
+              condition.conditions.push({method, conditions: [
+                {key, operator, method: 'orWhere', value: val}
+                {key, method: 'orWhereNull'}
+              ]})
+
+          else if _.isNull(val)
+            if mongo_op is '$eq'
+              condition.conditions.push({key, method: "#{method}Null"})
+            else
+              throw new Error "Unexpected null with query key '#{key}': '#{mongo_conditions}'"
+
+          else
+            condition.conditions.push({key, operator, method, value: val})
 
     else
       method = "#{method}Null" if method in ['where', 'orWhere'] and _.isNull(value)
