@@ -335,12 +335,6 @@ module.exports = class SqlCursor extends sync.Cursor
       # TODO: do these make sense with joins? apply them after un-joining the result?
       # @_appendLimits(query)
 
-    # Append where conditions and join if needed for the form `related_model.field = value`
-    @_appendRelatedWheres(query)
-
-    # Append where conditions and join if needed for the form `manytomanyrelation_id.field = value`
-    @_appendJoinedWheres(query)
-
 
     if true
       console.log('=======================query_old=======================')
@@ -350,6 +344,12 @@ module.exports = class SqlCursor extends sync.Cursor
       $columns or= if @joined then @_prefixColumns(@model_type, ast.fields) else @_columns(@model_type, ast.fields)
       query_old.select($columns)
       # @_appendSort(query_old)
+
+      # Append where conditions and join if needed for the form `related_model.field = value`
+      @_appendRelatedWheres(query_old)
+
+      # Append where conditions and join if needed for the form `manytomanyrelation_id.field = value`
+      @_appendJoinedWheres(query_old)
 
       console.dir(query_old.toString(), {depth: null, colors: true})
       console.log('=======================================================')

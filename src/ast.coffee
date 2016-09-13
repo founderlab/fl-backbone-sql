@@ -117,6 +117,13 @@ module.exports = class SqlAst
     if @cursor.$sort
       @sort = if _.isArray(@cursor.$sort) then @cursor.$sort else [@cursor.$sort]
 
+    @count = true if @cursor.$count
+    @exists = true if @cursor.$exists
+    @limit = @cursor.$limit or (if @cursor.$one then 1 else null)
+    @offset = @cursor.$offset
+
+    @_parse(@query, {table: @model_type.tableName()})
+
     @columns = @model_type.schema().columns()
     @columns.unshift('id') unless 'id' in @columns
 
@@ -131,13 +138,6 @@ module.exports = class SqlAst
       @fields = @columns
 
     @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
-
-    @count = true if @cursor.$count
-    @exists = true if @cursor.$exists
-    @limit = @cursor.$limit or (if @cursor.$one then 1 else null)
-    @offset = @cursor.$offset
-
-    @_parse(@query, {table: @model_type.tableName()})
 
   # Internal parse method that recursively parses the query
   _parse: (query, options={}) ->
