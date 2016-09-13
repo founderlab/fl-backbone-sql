@@ -117,6 +117,11 @@ module.exports = class SqlAst
     else if @cursor.$whitelist
       @fields = @cursor.$whitelist
 
+    @count = true if @cursor.$count
+    @exists = true if @cursor.$exists
+    @limit = @cursor.$limit or (if @cursor.$one then 1 else null)
+    @offset = @cursor.$offset
+
     @_parse(@query, {table: @model_type.tableName()})
 
   # Internal parse method that recursively parses the query

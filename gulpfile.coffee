@@ -27,7 +27,7 @@ testFn = (options={}) -> (callback) ->
   gulp.src([
       # "node_modules/backbone-orm/test/{issues,spec/sync}/**/*.tests.coffee"
       # "#{if tags.indexOf('@quick') >= 0 then '' else '{node_modules/backbone-rest/,}'}test/spec/**/*.tests.coffee"
-      'test/spec/sync/flat/find.tests.coffee'
+      'test/spec/sync/flat/page.tests.coffee'
     ])
     .pipe(mocha(_.extend({reporter: 'dot', grep: tags}, MOCHA_DATABASE_OPTIONS[options.protocol])))
     .pipe es.writeArray callback
@@ -36,7 +36,8 @@ testFn = (options={}) -> (callback) ->
 gulp.task 'test', ['build'], (callback) ->
   Async.series (testFn({protocol: protocol}) for protocol of MOCHA_DATABASE_OPTIONS), callback
   return # promises workaround: https://github.com/gulpjs/gulp/issues/455
-gulp.task 'test-postgres', ['build'], testFn({protocol: 'postgres'})
+# gulp.task 'test-postgres', ['build'], testFn({protocol: 'postgres'})
+gulp.task 'test-postgres', testFn({protocol: 'postgres'})
 gulp.task 'test-mysql', ['build'], testFn({protocol: 'mysql'})
 gulp.task 'test-sqlite3', ['build'], testFn({protocol: 'sqlite3'})
 

@@ -112,7 +112,6 @@ New
 
 _appendWhereAst = (query, condition) ->
   # console.log('Building', condition)
-
   if !_.isUndefined(condition.key)
     if condition.operator
       query[condition.method](condition.key, condition.operator, condition.value)
@@ -148,6 +147,11 @@ _appendSort = (query, sort_fields) ->
     query.orderBy(col, dir)
   return query
 
+_appendLimits = (query, limit, offset) ->
+  query.limit(limit) if limit
+  query.offset(offset) if offset
+  return query
+
 _tablePrefix = (model_type) -> "#{model_type.tableName()}_"
 
 _prefixColumns = (model_type, fields) ->
@@ -158,8 +162,16 @@ _prefixColumns = (model_type, fields) ->
 
 buildQueryFromAst = (query, ast) ->
   _appendWhereAst(query, ast.where)
+
+  if ast.count
+    return query.count('*')
+  if ast.exists
+    return query.count('*').limit(1)
+
   _appendSelect(query, ast.model_type, ast.fields)
   _appendSort(query, ast.sort)
+  _appendLimits(query, ast.limit, ast.offset)
+
   return query
 
 module.exports = class SqlCursor extends sync.Cursor
@@ -236,22 +248,24 @@ module.exports = class SqlCursor extends sync.Cursor
     catch err
       return callback("Query failed for model: #{@model_type.model_name} with error: #{err}")
 
-    if @_cursor.$sort
-      @_cursor.$sort = if _.isArray(@_cursor.$sort) then @_cursor.$sort else [@_cursor.$sort]
+    $fields = null
+    # if @_cursor.$sort
+    #   @_cursor.$sort = if _.isArray(@_cursor.$sort) then @_cursor.$sort else [@_cursor.$sort]
 
-    if @_cursor.$values
-      $fields = if @_cursor.$whitelist then _.intersection(@_cursor.$values, @_cursor.$whitelist) else @_cursor.$values
-    else if @_cursor.$select
-      $fields = if @_cursor.$whitelist then _.intersection(@_cursor.$select, @_cursor.$whitelist) else @_cursor.$select
-    else if @_cursor.$whitelist
-      $fields = @_cursor.$whitelist
+    # if @_cursor.$values
+    #   $fields = if @_cursor.$whitelist then _.intersection(@_cursor.$values, @_cursor.$whitelist) else @_cursor.$values
+    # else if @_cursor.$select
+    #   $fields = if @_cursor.$whitelist then _.intersection(@_cursor.$select, @_cursor.$whitelist) else @_cursor.$select
+    # else if @_cursor.$whitelist
+    #   $fields = @_cursor.$whitelist
+
 
     # This implementation uses a postgres window function when there are columns other than the $unique fields requested
     # TODO: implementation that works for all dbs
     if @_cursor.$unique
       $fields or= @_columns(@model_type, $fields)
 
-      if @hasCursorQuery('$count')
+      if @_cursor.$count
         query.count().from(@connection.distinct(@_cursor.$unique).from(@model_type.tableName()).as('count_query'))
         return query.exec (err, count_json) => callback(err, _extractCount(count_json))
 
@@ -274,13 +288,14 @@ module.exports = class SqlCursor extends sync.Cursor
       return @_exec query, callback
 
     # count and exists when there is not a join table
-    if @hasCursorQuery('$count') or @hasCursorQuery('$exists')
+    if @_cursor.$count or @_cursor.$exists
       @_appendRelatedWheres(query)
       @_appendJoinedWheres(query)
-      if @hasCursorQuery('$count')
-        return query.count('*').exec (err, count_json) => callback(null, _extractCount(count_json))
-      else
-        return query.count('*').limit(1).exec (err, count_json) => callback(null, _extractCount(count_json) > 0)
+
+      return query.exec (err, count_json) =>
+        return callback(err) if (err)
+        count = _extractCount(count_json)
+        callback(null, if @_cursor.$count then count else (count > 0))
 
     if @_cursor.$include
       @include_keys = if _.isArray(@_cursor.$include) then @_cursor.$include else [@_cursor.$include]
@@ -309,7 +324,7 @@ module.exports = class SqlCursor extends sync.Cursor
 
     else
       # TODO: do these make sense with joins? apply them after un-joining the result?
-      @_appendLimits(query)
+      # @_appendLimits(query)
 
     # Append where conditions and join if needed for the form `related_model.field = value`
     @_appendRelatedWheres(query)
@@ -338,7 +353,7 @@ module.exports = class SqlCursor extends sync.Cursor
   _exec: (query, callback) =>
     if @verbose
       console.log '\n----------'
-      console.log query.toString()
+      console.dir(query.toString(), {depth: null, colors: true})
       console.log '----------'
     query.exec (err, json) =>
       return callback(new Error("Query failed for model: #{@model_type.model_name} with error: #{err}")) if err
