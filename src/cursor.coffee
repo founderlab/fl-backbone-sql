@@ -214,6 +214,66 @@ buildQueryFromAst = (query, ast, options={}) ->
 
   return query
 
+
+
+
+
+  # Rows returned from a join query need to be un-merged into the correct json format
+_unjoinResults = (raw_json, ast, parseJson) ->
+  return raw_json unless raw_json and raw_json.length
+
+  json = []
+  model_type = ast.model_type
+
+  for row in raw_json
+    model_json = {}
+    row_relation_json = {}
+
+    # Fields are prefixed with the table name of the model they belong to so we can test which the values are for
+    # and assign them to the correct object
+    for key, value of row
+      if match = ast.prefixRegex().exec(key)
+        model_json[match[1]] = value
+
+      # else if @include_keys
+      #   for include_key in @include_keys
+      else
+        for relation_key, join of ast.joins
+          related_json = (row_relation_json[relation_key] or= {})
+          related_model_type = model_type.relation(relation_key).reverse_relation.model_type
+          if match = ast.prefixRegex(related_model_type.tableName()).exec(key)
+            related_json[match[1]] = value
+
+    # If there was a hasMany relationship or multiple $includes we'll have multiple rows for each model
+    if found = _.find(json, (test) -> test.id is model_json.id)
+      model_json = found
+    # Add this model to the result if we haven't already
+    else
+      json.push(model_json)
+
+    # Add relations to the model_json if included
+    for relation_key, related_json of row_relation_json
+      if _.isNull(related_json.id)
+        if model_type.relation(relation_key).type is 'hasMany'
+          model_json[relation_key] = []
+        else
+          model_json[relation_key] = null
+      else unless _.isEmpty(related_json)
+        reverse_relation_schema = model_type.relation(relation_key).reverse_relation.model_type.schema()
+        related_json = parseJson(related_json, reverse_relation_schema)
+        # related_json = @backbone_adapter.nativeToAttributes(related_json, reverse_relation_schema)
+        if model_type.relation(relation_key).type is 'hasMany'
+          model_json[relation_key] or= []
+          model_json[relation_key].push(related_json) unless _.find(model_json[relation_key], (test) -> test.id is related_json.id)
+        else
+          model_json[relation_key] = related_json
+
+  return json
+
+
+
+
+
 module.exports = class SqlCursor extends sync.Cursor
   verbose: false
   # verbose: true
@@ -402,9 +462,9 @@ module.exports = class SqlCursor extends sync.Cursor
       console.dir(query.toString(), {depth: null, colors: true})
       console.log '----------'
     query.exec (err, json) =>
-      # console.log('json', json)
+      console.log('json', json)
       return callback(new Error("Query failed for model: #{@model_type.model_name} with error: #{err}")) if err
-      json = @_joinedResultsToJSON(json) if @joined
+      json = _unjoinResults(json, ast, @backbone_adapter.nativeToAttributes) if ast.prefix_columns
       console.log('json2', json)
       if @queued_queries
         @_appendCompleteRelations(json, ast, callback)
@@ -522,6 +582,14 @@ module.exports = class SqlCursor extends sync.Cursor
         query.join(relation.join_table.tableName(), from_key, '=', to_key, 'left outer')
       _appendWhere(query, joined_wheres, relation.join_table.tableName())
 
+
+
+
+
+
+
+
+
   # Rows returned from a join query need to be un-merged into the correct json format
   _joinedResultsToJSON: (raw_json) ->
     return raw_json unless raw_json and raw_json.length
@@ -585,3 +653,28 @@ module.exports = class SqlCursor extends sync.Cursor
   _getRelation: (key) ->
     throw new Error("#{key} is not a relation of #{@model_type.model_name}") unless relation = @model_type.relation(key)
     return relation
+
+  # TODO: look at optimizing without left outer joins everywhere
+  # Make another query to get the complete set of related objects when they have been fitered by a where clause
+  _joinTo: (query, relation) ->
+    related_model_type = relation.reverse_relation.model_type
+    if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
+      pivot_table = relation.join_table.tableName()
+
+      # Join the from model to the pivot table
+      from_key = "#{@model_type.tableName()}.id"
+      pivot_to_key = "#{pivot_table}.#{relation.foreign_key}"
+      query.join(pivot_table, from_key, '=', pivot_to_key, 'left outer')
+
+      # Then to the to model's table
+      pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
+      to_key = "#{related_model_type.tableName()}.id"
+      query.join(related_model_type.tableName(), pivot_from_key, '=', to_key, 'left outer')
+    else
+      if relation.type is 'belongsTo'
+        from_key = "#{@model_type.tableName()}.#{relation.foreign_key}"
+        to_key = "#{related_model_type.tableName()}.id"
+      else
+        from_key = "#{@model_type.tableName()}.id"
+        to_key = "#{related_model_type.tableName()}.#{relation.foreign_key}"
+      query.join(related_model_type.tableName(), from_key, '=', to_key, 'left outer')

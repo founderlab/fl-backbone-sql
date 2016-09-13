@@ -128,7 +128,9 @@ module.exports = class SqlAst
 
   tablePrefix: (table) -> "#{table}_"
 
-  prefixRegex: (table) -> new RegExp("^#{@tablePrefix(table)}(.*)$")
+  prefixRegex: (table) ->
+    table or= @model_type.tableName()
+    new RegExp("^#{@tablePrefix(table)}(.*)$")
 
   getRelation: (key, model_type) ->
     model_type or= @model_type
@@ -174,7 +176,7 @@ module.exports = class SqlAst
     #   conditions.related_wheres[relation] = @_parseConditions(related_conditions)
 
     if query?.$ids
-      cond = @parseCondition(key: 'id', value: query.$ids, {table, method: 'whereIn'})
+      cond = @parseCondition('id', {$in: query.$ids}, {table})
       @where.conditions.push(cond)
 
     if query?.$or
@@ -244,6 +246,9 @@ module.exports = class SqlAst
     else
       method = "#{method}Null" if method in ['where', 'orWhere'] and _.isNull(value)
       condition = {key, value, method}
+
+    if _.isArray(condition.conditions) and condition.conditions.length is 1
+      return condition.conditions[0]
 
     return condition
 
