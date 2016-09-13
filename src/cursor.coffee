@@ -106,9 +106,45 @@ _appendWhere = (query, conditions, table) ->
   return query
 
 
+
+
+
+
+
+
+
+
+
+
 ###
 New
 ###
+
+
+# TODO: look at optimizing without left outer joins everywhere
+# Make another query to get the complete set of related objects when they have been fitered by a where clause
+_joinToRelation = (query, model_type, relation) ->
+  related_model_type = relation.reverse_relation.model_type
+  if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
+    pivot_table = relation.join_table.tableName()
+
+    # Join the from model to the pivot table
+    from_key = "#{model_type.tableName()}.id"
+    pivot_to_key = "#{pivot_table}.#{relation.foreign_key}"
+    query.join(pivot_table, from_key, '=', pivot_to_key, 'left outer')
+
+    # Then to the to model's table
+    pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
+    to_key = "#{related_model_type.tableName()}.id"
+    query.join(related_model_type.tableName(), pivot_from_key, '=', to_key, 'left outer')
+  else
+    if relation.type is 'belongsTo'
+      from_key = "#{model_type.tableName()}.#{relation.foreign_key}"
+      to_key = "#{related_model_type.tableName()}.id"
+    else
+      from_key = "#{model_type.tableName()}.id"
+      to_key = "#{related_model_type.tableName()}.#{relation.foreign_key}"
+    query.join(related_model_type.tableName(), from_key, '=', to_key, 'left outer')
 
 _appendWhereAst = (query, condition) ->
   # console.log('Building', condition)
@@ -137,9 +173,6 @@ _parseSortField = (sort) ->
   return [col, dir]
 
 _appendSelect = (query, ast) ->
-  # if ast.can_star
-  #   query.select('*')
-  # else
   query.select(ast.select)
   return query
 
@@ -163,17 +196,21 @@ _prefixColumns = (model_type, fields) ->
   return ("#{model_type.tableName()}.#{col} as #{_tablePrefix(model_type)}#{col}" for col in columns)
 
 
-buildQueryFromAst = (query, ast) ->
+buildQueryFromAst = (query, ast, options={}) ->
   _appendWhereAst(query, ast.where)
 
-  if ast.count
+  if ast.count or options.count
     return query.count('*')
-  if ast.exists
+  if ast.exists or options.exists
     return query.count('*').limit(1)
 
   _appendSelect(query, ast)
   _appendSort(query, ast.sort)
   _appendLimits(query, ast.limit, ast.offset)
+
+  for key, join of ast.joins
+    console.log('Processing join:', key)
+    _joinToRelation(query, ast.model_type, join.relation)
 
   return query
 
@@ -286,11 +323,9 @@ module.exports = class SqlCursor extends sync.Cursor
       console.log()
       console.log()
 
-      console.log('========================query=========================')
       query = @connection(@model_type.tableName())
       query = buildQueryFromAst(query, ast)
       @joined = true
-      console.dir(query.toString(), {depth: null, colors: true})
 
     catch err
       return callback("Query failed for model: #{@model_type.model_name} with error: #{err}")
@@ -306,32 +341,32 @@ module.exports = class SqlCursor extends sync.Cursor
         count = _extractCount(count_json)
         callback(null, if @_cursor.$count then count else (count > 0))
 
-    if @_cursor.$include
-      @include_keys = if _.isArray(@_cursor.$include) then @_cursor.$include else [@_cursor.$include]
-      throw Error("Invalid include specified: #{@include_keys}") unless @include_keys.length
+    # if @_cursor.$include
+    #   @include_keys = if _.isArray(@_cursor.$include) then @_cursor.$include else [@_cursor.$include]
+    #   throw Error("Invalid include specified: #{@include_keys}") unless @include_keys.length
 
-      # Join the related tables
-      @joined = true
-      to_columns = []
-      for key in @include_keys
-        relation = @_getRelation(key)
-        related_model_type = relation.reverse_relation.model_type
+    #   # Join the related tables
+    #   @joined = true
+    #   to_columns = []
+    #   for key in @include_keys
+    #     relation = @_getRelation(key)
+    #     related_model_type = relation.reverse_relation.model_type
 
-        # Compile the columns for the related model and prefix them with its table name
-        to_columns = to_columns.concat(@_prefixColumns(related_model_type))
+    #     # Compile the columns for the related model and prefix them with its table name
+    #     to_columns = to_columns.concat(@_prefixColumns(related_model_type))
 
-        @_joinTo(query, relation)
+    #     @_joinTo(query, relation)
 
-        # Use the full table name when adding the where clauses
-        if related_wheres = @_conditions.related_wheres[key]
-          (@queued_queries or= []).push(key)
-          _appendWhere(query, related_wheres, related_model_type.tableName())
+    #     # Use the full table name when adding the where clauses
+    #     if related_wheres = @_conditions.related_wheres[key]
+    #       (@queued_queries or= []).push(key)
+    #       _appendWhere(query, related_wheres, related_model_type.tableName())
 
-      # Compile the columns for this model and prefix them with its table name
-      from_columns = @_prefixColumns(@model_type, ast.fields)
-      $columns = from_columns.concat(to_columns)
+    #   # Compile the columns for this model and prefix them with its table name
+    #   from_columns = @_prefixColumns(@model_type, ast.fields)
+    #   $columns = from_columns.concat(to_columns)
 
-    else
+    # else
       # TODO: do these make sense with joins? apply them after un-joining the result?
       # @_appendLimits(query)
 
@@ -341,7 +376,7 @@ module.exports = class SqlCursor extends sync.Cursor
       query_old = @connection(@model_type.tableName())
       _appendWhere(query_old, @_conditions, @model_type.tableName())
 
-      $columns or= if @joined then @_prefixColumns(@model_type, ast.fields) else @_columns(@model_type, ast.fields)
+      $columns = if @joined then @_prefixColumns(@model_type, ast.fields) else @_columns(@model_type, ast.fields)
       query_old.select($columns)
       # @_appendSort(query_old)
 
@@ -357,6 +392,8 @@ module.exports = class SqlCursor extends sync.Cursor
       console.log()
       console.log()
 
+    console.log('========================query=========================')
+    console.dir(query.toString(), {depth: null, colors: true})
     @_exec query, ast, callback
 
   _exec: (query, ast, callback) =>
@@ -368,7 +405,7 @@ module.exports = class SqlCursor extends sync.Cursor
       # console.log('json', json)
       return callback(new Error("Query failed for model: #{@model_type.model_name} with error: #{err}")) if err
       json = @_joinedResultsToJSON(json) if @joined
-      # console.log('json2', json)
+      console.log('json2', json)
       if @queued_queries
         @_appendCompleteRelations(json, ast, callback)
       else
@@ -383,6 +420,7 @@ module.exports = class SqlCursor extends sync.Cursor
 
     # NOTE: limit and offset would apply to the join table so do as post-process. TODO: optimize
     if @_cursor.$include
+      console.log(@_cursor)
       if @_cursor.$offset
         number = json.length - @_cursor.$offset
         number = 0 if number < 0
@@ -391,13 +429,23 @@ module.exports = class SqlCursor extends sync.Cursor
       if @_cursor.$limit
         json = json.splice(0, Math.min(json.length, @_cursor.$limit))
 
-    if @hasCursorQuery('$page')
+    if @_cursor.$page
       query = @connection()
-      # _appendWhere(query, @_conditions, @model_type.tableName())
-      _appendWhereAst(query, ast)
+      query = buildQueryFromAst(query, ast, {count: true})
 
-      @_appendRelatedWheres(query)
-      @_appendJoinedWheres(query)
+      query_old = @connection()
+      _appendWhere(query_old, @_conditions, @model_type.tableName())
+      @_appendRelatedWheres(query_old)
+      @_appendJoinedWheres(query_old)
+      query.count('*')
+
+      console.log('--------NEW---------')
+      console.dir(query.toString(), {colors: true})
+      console.log('-----------------')
+
+      console.log('--------OLD---------')
+      console.dir(query_old.toString(), {colors: true})
+      console.log('-----------------')
 
       if @_cursor.$unique
         subquery = @connection.distinct(@_cursor.$unique)
@@ -406,20 +454,25 @@ module.exports = class SqlCursor extends sync.Cursor
       else
         query.from(@model_type.tableName())
 
-      query.count('*')
       if @verbose
-        console.log '\n---------- counting rows for $page'
-        console.log query.toString()
-        console.log '----------'
+        console.log '\n---------- counting rows for $page ----------'
+        console.dir query.toString(), {colors: true}
+        console.log '---------------------------------------------'
 
       query.exec (err, count_json) =>
         return callback(err) if err
+        console.log('\nFINAL (count):', {
+          offset: @_cursor.$offset or 0
+          total_rows: _extractCount(count_json)
+          rows: json
+        })
         callback(null, {
           offset: @_cursor.$offset or 0
           total_rows: _extractCount(count_json)
           rows: json
         })
     else
+      console.log('\nFINAL:', json)
       callback(null, json)
 
   # Make another query to get the complete set of related objects when they have been fitered by a where clause
@@ -468,31 +521,6 @@ module.exports = class SqlCursor extends sync.Cursor
         to_key = "#{relation.join_table.tableName()}.#{relation.foreign_key}"
         query.join(relation.join_table.tableName(), from_key, '=', to_key, 'left outer')
       _appendWhere(query, joined_wheres, relation.join_table.tableName())
-
-  # TODO: look at optimizing without left outer joins everywhere
-  # Make another query to get the complete set of related objects when they have been fitered by a where clause
-  _joinTo: (query, relation) ->
-    related_model_type = relation.reverse_relation.model_type
-    if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
-      pivot_table = relation.join_table.tableName()
-
-      # Join the from model to the pivot table
-      from_key = "#{@model_type.tableName()}.id"
-      pivot_to_key = "#{pivot_table}.#{relation.foreign_key}"
-      query.join(pivot_table, from_key, '=', pivot_to_key, 'left outer')
-
-      # Then to the to model's table
-      pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
-      to_key = "#{related_model_type.tableName()}.id"
-      query.join(related_model_type.tableName(), pivot_from_key, '=', to_key, 'left outer')
-    else
-      if relation.type is 'belongsTo'
-        from_key = "#{@model_type.tableName()}.#{relation.foreign_key}"
-        to_key = "#{related_model_type.tableName()}.id"
-      else
-        from_key = "#{@model_type.tableName()}.id"
-        to_key = "#{related_model_type.tableName()}.#{relation.foreign_key}"
-      query.join(related_model_type.tableName(), from_key, '=', to_key, 'left outer')
 
   # Rows returned from a join query need to be un-merged into the correct json format
   _joinedResultsToJSON: (raw_json) ->

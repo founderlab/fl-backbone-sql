@@ -73,10 +73,10 @@ module.exports = class SqlAst
   constructor: ->
     @select = []
     @where = {
-      method: 'where',
-      conditions: [],
+      method: 'where'
+      conditions: []
     }
-    @join = {}
+    @joins = {}
     @sort = null
     @limit = null
 
@@ -92,19 +92,11 @@ module.exports = class SqlAst
     console.log('> select:', @select)
     console.log('> where:')
     console.dir(@where, {depth: null, colors: true})
-    console.log('> join:', @join)
+    console.log('> joins:', ([k, v.columns] for k, v of @joins))
     console.log('> sort:', @sort)
     console.log('> limit:', @limit)
 
     console.log('---------------------------------------------------------')
-
-  columnName: (col, table) -> if table and @prefix_columns then "#{table}.#{col}" else col
-
-  prefixColumn: (col, table) -> "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
-
-  tablePrefix: (table) -> "#{table}_"
-
-  prefixRegex: (table) -> new RegExp("^#{@tablePrefix(table)}(.*)$")
 
   # Public method that sets up for parsing
   parse: (options) ->
@@ -122,22 +114,37 @@ module.exports = class SqlAst
     @limit = @cursor.$limit or (if @cursor.$one then 1 else null)
     @offset = @cursor.$offset
 
+    if @cursor.$include
+      @prefix_columns = true
+      @join(key) for key in @cursor.$include
+      console.log('joined', ([k, v.columns] for k, v of @joins))
     @_parse(@query, {table: @model_type.tableName()})
 
-    @columns = @model_type.schema().columns()
-    @columns.unshift('id') unless 'id' in @columns
+    @setSelectedColumns()
 
-    if @cursor.$values
-      @fields = if @cursor.$whitelist then _.intersection(@cursor.$values, @cursor.$whitelist) else @cursor.$values
-    else if @cursor.$select
-      @fields = if @cursor.$whitelist then _.intersection(@cursor.$select, @cursor.$whitelist) else @cursor.$select
-    else if @cursor.$whitelist
-      @fields = @cursor.$whitelist
-    else
-      @can_star = true #todo: set false if theres a relation
-      @fields = @columns
+  columnName: (col, table) -> if table and @prefix_columns then "#{table}.#{col}" else col
 
-    @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
+  prefixColumn: (col, table) -> "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
+
+  tablePrefix: (table) -> "#{table}_"
+
+  prefixRegex: (table) -> new RegExp("^#{@tablePrefix(table)}(.*)$")
+
+  getRelation: (key, model_type) ->
+    model_type or= @model_type
+    throw new Error("#{key} is not a relation of #{model_type.model_name}") unless relation = model_type.relation(key)
+    return relation
+
+  join: (key, relation) ->
+    console.log('JOINING', key)
+    relation or= @getRelation(key)
+    model_type = relation.reverse_relation.model_type
+    @joins[key] or= {
+      key
+      relation
+      model_type
+      columns: @prefixColumn(col, model_type.tableName()) for col in model_type.schema().columns()
+    }
 
   # Internal parse method that recursively parses the query
   _parse: (query, options={}) ->
@@ -148,7 +155,11 @@ module.exports = class SqlAst
 
       # A dot indicates a condition on a related model
       if key.indexOf('.') > 0
-        @parseDotRelation(key, value)
+        @prefix_columns = true
+        [cond, relation_name, relation] = @parseDotRelation(key, value)
+        console.log('[cond, relation_name]', [cond, relation_name])
+        @join(relation_name, relation)
+        @where.conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
@@ -169,6 +180,20 @@ module.exports = class SqlAst
     if query?.$or
       for q in query.$or
         @_parse(q, {table, method: 'orWhere'})
+
+  parseDotRelation: (key, value) ->
+    [relation_name, related_field] = key.split('.')
+    console.log('key, relation_name, related_field', key, relation_name, related_field)
+    relation = @getRelation(relation_name)
+    cond = @parseCondition(related_field, value, {table: relation.reverse_relation.model_type.tableName()})
+    return [cond, relation_name, relation]
+    # related_wheres[relation] or= {}
+    # related_wheres[relation][key] = value
+
+  parseManyToManyRelation: (key, value, reverse_relation) ->
+    relation = reverse_relation.reverse_relation
+    # conditions.joined_wheres[relation.key] or= {wheres: [], or_wheres: [], where_conditionals: []}
+    # _appendCondition(conditions.joined_wheres[relation.key], key, value, method)
 
   parseCondition: (key, value, options={}) ->
     method = options.method || 'where'
@@ -222,12 +247,21 @@ module.exports = class SqlAst
 
     return condition
 
-  parseDotRelation: (key, value) ->
-    # [relation, key] = key.split('.')
-    # related_wheres[relation] or= {}
-    # related_wheres[relation][key] = value
+  setSelectedColumns: () ->
+    @columns = @model_type.schema().columns()
+    @columns.unshift('id') unless 'id' in @columns
 
-  parseManyToManyRelation: (key, value, reverse_relation) ->
-    relation = reverse_relation.reverse_relation
-    # conditions.joined_wheres[relation.key] or= {wheres: [], or_wheres: [], where_conditionals: []}
-    # _appendCondition(conditions.joined_wheres[relation.key], key, value, method)
+    if @cursor.$values
+      @fields = if @cursor.$whitelist then _.intersection(@cursor.$values, @cursor.$whitelist) else @cursor.$values
+    else if @cursor.$select
+      @fields = if @cursor.$whitelist then _.intersection(@cursor.$select, @cursor.$whitelist) else @cursor.$select
+    else if @cursor.$whitelist
+      @fields = @cursor.$whitelist
+    else
+      @fields = @columns
+
+    @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
+
+    if @cursor.$include
+      for key in @cursor.$include
+        @select = @select.concat(@joins[key].columns)

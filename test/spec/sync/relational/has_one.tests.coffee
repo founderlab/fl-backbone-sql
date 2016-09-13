@@ -964,161 +964,161 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
 #             assert.equal(reverse.get('owner_id'), owner.id, "\nRelated model has the correct id: Expected: #{reverse.get('owner_id')}\nActual: #{owner.id}")
 #           done()
 
-    it 'Can query on a related (hasOne) model property when the relation is included', (done) ->
-      Reverse.findOne (err, reverse) ->
-        assert.ok(!err, "No errors: #{err}")
-        assert.ok(reverse, 'found model')
-        Owner.cursor({'reverse.name': reverse.get('name')}).include('reverse').toJSON (err, json) ->
+    # it 'Can query on a related (hasOne) model property when the relation is included', (done) ->
+    #   Reverse.findOne (err, reverse) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     assert.ok(reverse, 'found model')
+    #     Owner.cursor({'reverse.name': reverse.get('name')}).include('reverse').toJSON (err, json) ->
+    #       assert.ok(!err, "No errors: #{err}")
+    #       assert.ok(json, "found json")
+    #       assert.equal(json.length, 1, "json has the correct number or results. Expecting: 1. Actual #{json.length}")
+    #       owner = json[0]
+    #       assert.ok(owner.reverse, "Has a related reverse")
+    #       assert.ok(owner.reverse.id, "Related model has an id")
+
+    #       unless Owner.relationIsEmbedded('reverse') # TODO: confirm this is correct
+    #         assert.equal(reverse.get('owner_id'), owner.id, "\nRelated model has the correct id: Expected: #{reverse.get('owner_id')}\nActual: #{owner.id}")
+    #       assert.equal(reverse.get('name'), owner.reverse.name, "\nIncluded model has the correct name: Expected: #{reverse.get('name')}\nActual: #{owner.reverse.name}")
+    #       done()
+
+    # it 'Should be able to count relationships', (done) ->
+    #   # TODO: implement embedded find
+    #   return done() if options.embed
+
+    #   Owner.findOne (err, owner) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     assert.ok(owner, 'found model')
+
+    #     Reverse.count {owner_id: owner.id}, (err, count) ->
+    #       assert.ok(!err, "No errors: #{err}")
+    #       assert.equal(1, count, "Counted reverses. Expected: 1. Actual: #{count}")
+    #       done()
+
+    # it 'Should be able to count relationships with paging', (done) ->
+    #   # TODO: implement embedded find
+    #   return done() if options.embed
+
+    #   Owner.findOne (err, owner) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     assert.ok(owner, 'found model')
+
+    #     Reverse.cursor({owner_id: owner.id, $page: true}).toJSON (err, paging_info) ->
+    #       assert.ok(!err, "No errors: #{err}")
+    #       assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
+    #       assert.equal(1, paging_info.total_rows, "Counted reverses. Expected: 1. Actual: #{paging_info.total_rows}")
+    #       done()
+
+    backlinkTests = (virtual) ->
+      it "Should update backlinks using set (#{if virtual then 'virtual' else 'no modifiers'})", (done) ->
+        # TODO: implement embedded
+        return done() if options.embed
+
+        checkReverseFn = (reverse, expected_owner) -> return (callback) ->
+          assert.ok(reverse, 'Reverse exists')
+          assert.equal(expected_owner, reverse.get('owner'), "Reverse owner is correct. Expected: #{expected_owner}. Actual: #{reverse.get('owner')}")
+          callback()
+
+        Owner.cursor().limit(2).include('reverse').toModels (err, owners) ->
+          if virtual # set as virtual relationship after including reverse
+            relation = Owner.relation('reverse')
+            relation.virtual = true
+
           assert.ok(!err, "No errors: #{err}")
-          assert.ok(json, "found json")
-          assert.equal(json.length, 1, "json has the correct number or results. Expecting: 1. Actual #{json.length}")
-          owner = json[0]
-          assert.ok(owner.reverse, "Has a related reverse")
-          assert.ok(owner.reverse.id, "Related model has an id")
+          assert.equal(2, owners.length, "Found owners. Expected: 2. Actual: #{owners.length}")
 
-          unless Owner.relationIsEmbedded('reverse') # TODO: confirm this is correct
-            assert.equal(reverse.get('owner_id'), owner.id, "\nRelated model has the correct id: Expected: #{reverse.get('owner_id')}\nActual: #{owner.id}")
-          assert.equal(reverse.get('name'), owner.reverse.name, "\nIncluded model has the correct name: Expected: #{reverse.get('name')}\nActual: #{owner.reverse.name}")
-          done()
+          owner0 = owners[0]; owner0_id = owner0.id; reverse0 = owner0.get('reverse')
+          owner1 = owners[1]; owner1_id = owner1.id; reverse1 = owner1.get('reverse')
 
-#     it 'Should be able to count relationships', (done) ->
-#       # TODO: implement embedded find
-#       return done() if options.embed
+          assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
+          assert.ok(owner1.get('reverse'), "Owner1 has 1 reverse.")
 
-#       Owner.findOne (err, owner) ->
-#         assert.ok(!err, "No errors: #{err}")
-#         assert.ok(owner, 'found model')
+          queue = new Queue(1)
+          queue.defer checkReverseFn(reverse0, owner0)
+          queue.defer checkReverseFn(reverse1, owner1)
+          queue.defer (callback) ->
+            owner0.set({reverse: reverse1})
 
-#         Reverse.count {owner_id: owner.id}, (err, count) ->
-#           assert.ok(!err, "No errors: #{err}")
-#           assert.equal(1, count, "Counted reverses. Expected: 1. Actual: #{count}")
-#           done()
+            assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
+            assert.ok(!owner1.get('reverse'), "Owner1 has no reverse.")
 
-#     it 'Should be able to count relationships with paging', (done) ->
-#       # TODO: implement embedded find
-#       return done() if options.embed
+            queue.defer checkReverseFn(reverse1, owner0) # confirm it also is related
+            queue.defer checkReverseFn(reverse0, owner0) # confirm it stayed
+            assert.equal(null, owner1.get('reverse'), "Owner's reverse is cleared.\nExpected: #{null}.\nActual: #{JSONUtils.stringify(owner1.get('reverse'))}")
+            callback()
 
-#       Owner.findOne (err, owner) ->
-#         assert.ok(!err, "No errors: #{err}")
-#         assert.ok(owner, 'found model')
+          # save and recheck
+          queue.defer (callback) -> owner0.save callback
+          queue.defer (callback) -> owner1.save callback
+          queue.defer (callback) ->
+            BackboneORM.model_cache.reset() # reset cache
+            Owner.cursor({$ids: [owner0.id, owner1.id]}).limit(2).include('reverse').toModels (err, owners) ->
+              assert.ok(!err, "No errors: #{err}")
+              assert.equal(2, owners.length, "Found owners post-save. Expected: 2. Actual: #{owners.length}")
 
-#         Reverse.cursor({owner_id: owner.id, $page: true}).toJSON (err, paging_info) ->
-#           assert.ok(!err, "No errors: #{err}")
-#           assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
-#           assert.equal(1, paging_info.total_rows, "Counted reverses. Expected: 1. Actual: #{paging_info.total_rows}")
-#           done()
+              # lookup owners
+              owner0 = owner1 = null
+              for owner in owners
+                if owner.id is owner0_id
+                  owner0 = owner
+                else if owner.id is owner1_id
+                  owner1 = owner
+              assert(owner0, 'refound owner0')
+              assert(owner1, 'refound owner1')
+              reverse0b = owner0.get('reverse')
+              reverse1b = owner1.get('reverse')
 
-#     backlinkTests = (virtual) ->
-#       it "Should update backlinks using set (#{if virtual then 'virtual' else 'no modifiers'})", (done) ->
-#         # TODO: implement embedded
-#         return done() if options.embed
+              if virtual
+                assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
+                assert.ok(owner1.get('reverse'), "Owner1 has 1 reverse.")
+              else
+                assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
+                assert.ok(!owner1.get('reverse'), "Owner1 has no reverse.")
 
-#         checkReverseFn = (reverse, expected_owner) -> return (callback) ->
-#           assert.ok(reverse, 'Reverse exists')
-#           assert.equal(expected_owner, reverse.get('owner'), "Reverse owner is correct. Expected: #{expected_owner}. Actual: #{reverse.get('owner')}")
-#           callback()
+                queue.defer checkReverseFn(reverse0b, owner0) # confirm it moved
 
-#         Owner.cursor().limit(2).include('reverse').toModels (err, owners) ->
-#           if virtual # set as virtual relationship after including reverse
-#             relation = Owner.relation('reverse')
-#             relation.virtual = true
+                # TODO: determine reason on SQL for updated_at missing
+                # assert.deepEqual(reverse1.toJSON(), reverse0b.toJSON(), "Reverse is cleared.\nExpected: #{JSONUtils.stringify(reverse1.toJSON())}.\nActual: #{JSONUtils.stringify(reverse0b.toJSON())}")
+                assert.deepEqual(_.pick(reverse1.toJSON(), 'created_at'), _.pick(reverse0b.toJSON(), 'created_at'), "Reverse is cleared.\nExpected: #{JSONUtils.stringify(_.pick(reverse1.toJSON(), 'updated_at', 'created_at'))}.\nActual: #{JSONUtils.stringify(_.pick(reverse0b.toJSON(), 'updated_at', 'created_at'))}")
 
-#           assert.ok(!err, "No errors: #{err}")
-#           assert.equal(2, owners.length, "Found owners. Expected: 2. Actual: #{owners.length}")
+                assert.equal(null, owner1.get('reverse'), "Owner's reverse is cleared.\nExpected: #{null}.\nActual: #{JSONUtils.stringify(owner1.get('reverse'))}")
+              callback()
 
-#           owner0 = owners[0]; owner0_id = owner0.id; reverse0 = owner0.get('reverse')
-#           owner1 = owners[1]; owner1_id = owner1.id; reverse1 = owner1.get('reverse')
+          queue.await (err) ->
+            assert.ok(!err, "No errors: #{err}")
+            done()
 
-#           assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
-#           assert.ok(owner1.get('reverse'), "Owner1 has 1 reverse.")
+    backlinkTests(false)
+    # backlinkTests(true)
 
-#           queue = new Queue(1)
-#           queue.defer checkReverseFn(reverse0, owner0)
-#           queue.defer checkReverseFn(reverse1, owner1)
-#           queue.defer (callback) ->
-#             owner0.set({reverse: reverse1})
+    # it 'does not serialize virtual attributes', (done) ->
+    #   json_key = if options.embed then 'flat' else 'flat_id'
 
-#             assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
-#             assert.ok(!owner1.get('reverse'), "Owner1 has no reverse.")
+    #   Owner.findOne (err, owner) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     assert.ok(owner, 'Owners found')
+    #     flat_id = owner.get('flat').id
 
-#             queue.defer checkReverseFn(reverse1, owner0) # confirm it also is related
-#             queue.defer checkReverseFn(reverse0, owner0) # confirm it stayed
-#             assert.equal(null, owner1.get('reverse'), "Owner's reverse is cleared.\nExpected: #{null}.\nActual: #{JSONUtils.stringify(owner1.get('reverse'))}")
-#             callback()
+    #     json = owner.toJSON()
+    #     assert.ok(json.hasOwnProperty(json_key), 'Serialized flat')
 
-#           # save and recheck
-#           queue.defer (callback) -> owner0.save callback
-#           queue.defer (callback) -> owner1.save callback
-#           queue.defer (callback) ->
-#             BackboneORM.model_cache.reset() # reset cache
-#             Owner.cursor({$ids: [owner0.id, owner1.id]}).limit(2).include('reverse').toModels (err, owners) ->
-#               assert.ok(!err, "No errors: #{err}")
-#               assert.equal(2, owners.length, "Found owners post-save. Expected: 2. Actual: #{owners.length}")
+    #     relation = owner.relation('flat')
+    #     relation.virtual = true
 
-#               # lookup owners
-#               owner0 = owner1 = null
-#               for owner in owners
-#                 if owner.id is owner0_id
-#                   owner0 = owner
-#                 else if owner.id is owner1_id
-#                   owner1 = owner
-#               assert(owner0, 'refound owner0')
-#               assert(owner1, 'refound owner1')
-#               reverse0b = owner0.get('reverse')
-#               reverse1b = owner1.get('reverse')
+    #     virtual_json = owner.toJSON()
+    #     assert.ok(!virtual_json.hasOwnProperty(json_key), 'Did not serialize flat')
 
-#               if virtual
-#                 assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
-#                 assert.ok(owner1.get('reverse'), "Owner1 has 1 reverse.")
-#               else
-#                 assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
-#                 assert.ok(!owner1.get('reverse'), "Owner1 has no reverse.")
+    #     owner_with_flat = new Owner(json)
+    #     assert.equal(owner_with_flat.get('flat').id, flat_id, 'Virtual with flat was deserialized')
 
-#                 queue.defer checkReverseFn(reverse0b, owner0) # confirm it moved
+    #     owner_with_virtual_flat = new Owner(virtual_json)
+    #     assert.equal(owner_with_virtual_flat.get('flat'), null, 'Virtual without flat was deserialized')
+    #     done()
 
-#                 # TODO: determine reason on SQL for updated_at missing
-#                 # assert.deepEqual(reverse1.toJSON(), reverse0b.toJSON(), "Reverse is cleared.\nExpected: #{JSONUtils.stringify(reverse1.toJSON())}.\nActual: #{JSONUtils.stringify(reverse0b.toJSON())}")
-#                 assert.deepEqual(_.pick(reverse1.toJSON(), 'created_at'), _.pick(reverse0b.toJSON(), 'created_at'), "Reverse is cleared.\nExpected: #{JSONUtils.stringify(_.pick(reverse1.toJSON(), 'updated_at', 'created_at'))}.\nActual: #{JSONUtils.stringify(_.pick(reverse0b.toJSON(), 'updated_at', 'created_at'))}")
+    #     # owner.save {flat: null}, (err) ->
+    #     #   assert.ok(!err, "No errors: #{err}")
 
-#                 assert.equal(null, owner1.get('reverse'), "Owner's reverse is cleared.\nExpected: #{null}.\nActual: #{JSONUtils.stringify(owner1.get('reverse'))}")
-#               callback()
-
-#           queue.await (err) ->
-#             assert.ok(!err, "No errors: #{err}")
-#             done()
-
-#     backlinkTests(false)
-#     backlinkTests(true)
-
-#     it 'does not serialize virtual attributes', (done) ->
-#       json_key = if options.embed then 'flat' else 'flat_id'
-
-#       Owner.findOne (err, owner) ->
-#         assert.ok(!err, "No errors: #{err}")
-#         assert.ok(owner, 'Owners found')
-#         flat_id = owner.get('flat').id
-
-#         json = owner.toJSON()
-#         assert.ok(json.hasOwnProperty(json_key), 'Serialized flat')
-
-#         relation = owner.relation('flat')
-#         relation.virtual = true
-
-#         virtual_json = owner.toJSON()
-#         assert.ok(!virtual_json.hasOwnProperty(json_key), 'Did not serialize flat')
-
-#         owner_with_flat = new Owner(json)
-#         assert.equal(owner_with_flat.get('flat').id, flat_id, 'Virtual with flat was deserialized')
-
-#         owner_with_virtual_flat = new Owner(virtual_json)
-#         assert.equal(owner_with_virtual_flat.get('flat'), null, 'Virtual without flat was deserialized')
-#         done()
-
-#         # owner.save {flat: null}, (err) ->
-#         #   assert.ok(!err, "No errors: #{err}")
-
-#         #   BackboneORM.model_cache.reset() # reset cache
-#         #   Owner.find owner.id, (err, loaded_owner) ->
-#         #     assert.ok(!err, "No errors: #{err}")
-#         #     assert.equal(loaded_owner.get('flat').id, flat_id, 'Virtual flat is not saved')
-#         #     done()
+    #     #   BackboneORM.model_cache.reset() # reset cache
+    #     #   Owner.find owner.id, (err, loaded_owner) ->
+    #     #     assert.ok(!err, "No errors: #{err}")
+    #     #     assert.equal(loaded_owner.get('flat').id, flat_id, 'Virtual flat is not saved')
+    #     #     done()
