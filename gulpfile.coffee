@@ -27,7 +27,8 @@ testFn = (options={}) -> (callback) ->
   gulp.src([
       # "node_modules/backbone-orm/test/{issues,spec/sync}/**/*.tests.coffee"
       # "#{if tags.indexOf('@quick') >= 0 then '' else '{node_modules/backbone-rest/,}'}test/spec/**/*.tests.coffee"
-      'test/spec/sync/flat/page.tests.coffee'
+      'test/spec/sync/relational/has_one.tests.coffee'
+      # 'test/spec/sync/relational/*.tests.coffee'
     ])
     .pipe(mocha(_.extend({reporter: 'dot', grep: tags}, MOCHA_DATABASE_OPTIONS[options.protocol])))
     .pipe es.writeArray callback

@@ -68,8 +68,6 @@ tree = {
 # Each condition starts its own where block if it had subconditions
 # $or has a conditions array with potentially different keys on each condition
 
-columnName = (col, table) -> if table then "#{table}.#{col}" else col
-
 module.exports = class SqlAst
 
   constructor: ->
@@ -100,15 +98,27 @@ module.exports = class SqlAst
 
     console.log('---------------------------------------------------------')
 
+  columnName: (col, table) -> if table and @prefix_columns then "#{table}.#{col}" else col
+
+  prefixColumn: (col, table) -> "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
+
+  tablePrefix: (table) -> "#{table}_"
+
+  prefixRegex: (table) -> new RegExp("^#{@tablePrefix(table)}(.*)$")
+
   # Public method that sets up for parsing
   parse: (options) ->
     @find = options.find || {}
     @cursor = options.cursor || {}
     @query = _.extend({}, @find, @cursor)
     @model_type = options.model_type
+    @prefix_columns = options.prefix_columns isnt false
 
     if @cursor.$sort
       @sort = if _.isArray(@cursor.$sort) then @cursor.$sort else [@cursor.$sort]
+
+    @columns = @model_type.schema().columns()
+    @columns.unshift('id') unless 'id' in @columns
 
     if @cursor.$values
       @fields = if @cursor.$whitelist then _.intersection(@cursor.$values, @cursor.$whitelist) else @cursor.$values
@@ -116,6 +126,11 @@ module.exports = class SqlAst
       @fields = if @cursor.$whitelist then _.intersection(@cursor.$select, @cursor.$whitelist) else @cursor.$select
     else if @cursor.$whitelist
       @fields = @cursor.$whitelist
+    else
+      @can_star = true #todo: set false if theres a relation
+      @fields = @columns
+
+    @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
 
     @count = true if @cursor.$count
     @exists = true if @cursor.$exists
@@ -157,7 +172,7 @@ module.exports = class SqlAst
 
   parseCondition: (key, value, options={}) ->
     method = options.method || 'where'
-    key = columnName(key, options.table)
+    key = @columnName(key, options.table)
 
     condition = {}
 
