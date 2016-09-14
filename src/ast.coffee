@@ -166,13 +166,16 @@ module.exports = class SqlAst
       if key.indexOf('.') > 0
         @prefix_columns = true
         [cond, relation_name, relation] = @parseDotRelation(key, value)
-        console.log('[cond, relation_name]', [cond, relation_name])
         @join(relation_name, relation, {condition: true})
         @where.conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
-        @parseManyToManyRelation(key, value, reverse_relation)
+        @prefix_columns = true
+        [cond, relation_name, relation] = @parseManyToManyRelation(key, value, reverse_relation)
+        console.log('[cond, relation_name, relation]', [cond, relation_name, relation])
+        @join(relation_name, relation, {pivot_only: true})
+        @where.conditions.push(cond)
 
       else
         cond = @parseCondition(key, value, {table, method: options.method})
@@ -201,6 +204,9 @@ module.exports = class SqlAst
 
   parseManyToManyRelation: (key, value, reverse_relation) ->
     relation = reverse_relation.reverse_relation
+    relation_name = relation.key
+    cond = @parseCondition('id', value, {table: relation.join_table.tableName()})
+    return [cond, relation_name, relation]
     # conditions.joined_wheres[relation.key] or= {wheres: [], or_wheres: [], where_conditionals: []}
     # _appendCondition(conditions.joined_wheres[relation.key], key, value, method)
 

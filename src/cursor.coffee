@@ -123,8 +123,9 @@ New
 
 # TODO: look at optimizing without left outer joins everywhere
 # Make another query to get the complete set of related objects when they have been fitered by a where clause
-_joinToRelation = (query, model_type, relation) ->
+_joinToRelation = (query, model_type, relation, options={}) ->
   related_model_type = relation.reverse_relation.model_type
+
   if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
     pivot_table = relation.join_table.tableName()
 
@@ -133,10 +134,12 @@ _joinToRelation = (query, model_type, relation) ->
     pivot_to_key = "#{pivot_table}.#{relation.foreign_key}"
     query.join(pivot_table, from_key, '=', pivot_to_key, 'left outer')
 
-    # Then to the to model's table
-    pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
-    to_key = "#{related_model_type.tableName()}.id"
-    query.join(related_model_type.tableName(), pivot_from_key, '=', to_key, 'left outer')
+    unless options.pivot_only
+      # Then to the to model's table (only if we need data from them second table)
+      pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
+      to_key = "#{related_model_type.tableName()}.id"
+      query.join(related_model_type.tableName(), pivot_from_key, '=', to_key, 'left outer')
+
   else
     if relation.type is 'belongsTo'
       from_key = "#{model_type.tableName()}.#{relation.foreign_key}"
@@ -188,14 +191,6 @@ _appendLimits = (query, limit, offset) ->
   query.offset(offset) if offset
   return query
 
-_tablePrefix = (model_type) -> "#{model_type.tableName()}_"
-
-_prefixColumns = (model_type, fields) ->
-  columns = if fields then _.clone(fields) else model_type.schema().columns()
-  columns.push('id') unless 'id' in columns
-  return ("#{model_type.tableName()}.#{col} as #{_tablePrefix(model_type)}#{col}" for col in columns)
-
-
 buildQueryFromAst = (query, ast, options={}) ->
   _appendWhereAst(query, ast.where)
 
@@ -210,7 +205,7 @@ buildQueryFromAst = (query, ast, options={}) ->
   if (_.size(ast.joins))
     for key, join of ast.joins
       console.log('Processing join:', key)
-      _joinToRelation(query, ast.model_type, join.relation)
+      _joinToRelation(query, ast.model_type, join.relation, {pivot_only: (join.pivot_only and not (join.include or join.condition))})
   else
     _appendLimits(query, ast.limit, ast.offset)
 
@@ -291,7 +286,9 @@ module.exports = class SqlCursor extends sync.Cursor
 
       # Many to Many relationships may be queried on the foreign key of the join table
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
+        console.dir("'**************#{key}****************'", {colors: true})
         relation = reverse_relation.reverse_relation
+        console.log('relation.key', relation.key)
         conditions.joined_wheres[relation.key] or= {wheres: [], or_wheres: [], where_conditionals: []}
         _appendCondition(conditions.joined_wheres[relation.key], key, value, method)
       else
@@ -502,7 +499,7 @@ module.exports = class SqlCursor extends sync.Cursor
       _appendWhere(query_old, @_conditions, @model_type.tableName())
       @_appendRelatedWheres(query_old)
       @_appendJoinedWheres(query_old)
-      query.count('*')
+      query_old.count('*')
 
       console.log('--------NEW---------')
       console.dir(query.toString(), {colors: true})
@@ -563,31 +560,8 @@ module.exports = class SqlCursor extends sync.Cursor
         _.extend(model, placeholder)
       @_processResponse(json, ast, callback)
 
-  # # Make another query to get the complete set of related objects when they have been fitered by a where clause
-  # _appendCompleteRelations: (json, ast, callback) ->
-  #   new_ast = new Ast({
-  #     query: {
-  #       $ids: _.pluck(json, 'id')
-  #     }
-  #   })
 
-  #   new_query = @connection(@model_type.tableName())
-  #   new_query.whereIn(_columnName('id', @model_type.tableName()), _.pluck(json, 'id'))
-  #   to_columns = []
-  #   for key in @queued_queries
-  #     relation = @_getRelation(key)
-  #     related_model_type = relation.reverse_relation.model_type
-  #     to_columns = to_columns.concat(@_prefixColumns(related_model_type))
-  #     @_joinTo(new_query, relation)
 
-  #   new_query.select((@_prefixColumns(@model_type, ['id'])).concat(to_columns))
-  #   new_query.exec (err, new_json) =>
-  #     return callback(err) if err
-  #     relation_json = @_joinedResultsToJSON(new_json)
-  #     for placeholder in relation_json
-  #       model = _.find(json, (test) -> test.id is placeholder.id)
-  #       _.extend(model, placeholder)
-  #     @_processResponse(json, ast, callback)
 
   _appendRelatedWheres: (query) ->
     return if _.isEmpty(@_conditions.related_wheres)
@@ -610,65 +584,12 @@ module.exports = class SqlCursor extends sync.Cursor
     # Ensure that a join with the join table occurs and add the where clause for the foreign key
     for key, joined_wheres of @_conditions.joined_wheres
       relation = @_getRelation(key)
+      console.log('_appendJoinedWheres', key)
       unless key in _.keys(@_conditions.related_wheres) or (@include_keys and key in @include_keys)
         from_key = "#{@model_type.tableName()}.id"
         to_key = "#{relation.join_table.tableName()}.#{relation.foreign_key}"
         query.join(relation.join_table.tableName(), from_key, '=', to_key, 'left outer')
       _appendWhere(query, joined_wheres, relation.join_table.tableName())
-
-
-
-
-
-
-
-
-
-  # Rows returned from a join query need to be un-merged into the correct json format
-  _joinedResultsToJSON: (raw_json) ->
-    return raw_json unless raw_json and raw_json.length
-
-    json = []
-    for row in raw_json
-      model_json = {}
-      row_relation_json = {}
-
-      # Fields are prefixed with the table name of the model they belong to so we can test which the values are for
-      # and assign them to the correct object
-      for key, value of row
-        if match = @_prefixRegex(@model_type).exec(key)
-          model_json[match[1]] = value
-        else if @include_keys
-          for include_key in @include_keys
-            related_json = (row_relation_json[include_key] or= {})
-            related_model_type = @model_type.relation(include_key).reverse_relation.model_type
-            if match = @_prefixRegex(related_model_type).exec(key)
-              related_json[match[1]] = value
-
-      # If there was a hasMany relationship or multiple $includes we'll have multiple rows for each model
-      if found = _.find(json, (test) -> test.id is model_json.id)
-        model_json = found
-      # Add this model to the result if we haven't already
-      else
-        json.push(model_json)
-
-      # Add relations to the model_json if included
-      for include_key, related_json of row_relation_json
-        if _.isNull(related_json.id)
-          if @model_type.relation(include_key).type is 'hasMany'
-            model_json[include_key] = []
-          else
-            model_json[include_key] = null
-        else if not _.isEmpty(related_json)
-          reverse_relation_schema = @model_type.relation(include_key).reverse_relation.model_type.schema()
-          related_json = @backbone_adapter.nativeToAttributes(related_json, reverse_relation_schema)
-          if @model_type.relation(include_key).type is 'hasMany'
-            model_json[include_key] or= []
-            model_json[include_key].push(related_json) unless _.find(model_json[include_key], (test) -> test.id is related_json.id)
-          else
-            model_json[include_key] = related_json
-
-    return json
 
   _columns: (model_type, fields) ->
     columns = if fields then _.clone(fields) else model_type.schema().columns()
