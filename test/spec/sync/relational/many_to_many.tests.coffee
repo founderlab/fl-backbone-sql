@@ -3,7 +3,7 @@ assert = assert or require?('chai').assert
 BackboneORM = window?.BackboneORM; try BackboneORM or= require?('backbone-orm') catch; try BackboneORM or= require?('../../../../backbone-orm')
 {_, Backbone, Queue, Utils, JSONUtils, Fabricator} = BackboneORM
 
-_.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
+_.each BackboneORM.TestUtils.optionSets(), exports = (options) ->
   options = _.extend({}, options, __test__parameters) if __test__parameters?
   return if options.embed and not options.sync.capabilities(options.database_url or '').embed
 
@@ -35,7 +35,7 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
         }, BASE_SCHEMA)
         sync: SYNC(Owner)
 
-    # after (callback) -> Utils.resetSchemas [Reverse, Owner], callback
+    after (callback) -> Utils.resetSchemas [Reverse, Owner], callback
 
     beforeEach (callback) ->
       relation = Owner.relation('reverses')
@@ -84,9 +84,6 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
           assert.ok(!err, "No errors: #{err}")
           new_model.set({reverses: reverse_ids})
           new_model.get 'reverses', (err, reverses) ->
-            console.log(reverse_ids)
-            # console.dir(r.id for r in reverses, {colors: true})
-            console.dir(r.toJSON() for r in reverses, {colors: true})
             assert.ok(!err, "No errors: #{err}")
             assert.equal(4, reverses.length, "found 4 related model. Actual: #{reverses.length}")
             assert.equal(_.difference(reverse_ids, (test.id for test in reverses)).length, 0, "expected owners: #{_.difference(reverse_ids, (test.id for test in reverses))}")

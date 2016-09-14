@@ -14,60 +14,6 @@ COMPARATORS =
   $eq: '='
 COMPARATOR_KEYS = _.keys(COMPARATORS)
 
-
-###
-tree = {
-
-  select: ['t.id', 't.name'],
-
-  where: {
-    method: 'where',
-    conditions: [{
-      method: 'where',
-      column: 't.id',
-      value: 1,
-    }, {
-      method: 'where',
-      operator: '>',
-      column: 't.id',
-      value: 2,
-    }, {
-      method: 'where',
-      conditions: [
-        {method: 'orWhere', column: 't.id', value: 2},
-        {method: 'orWhere', column: 't.id', value: 3},
-        {method: 'orWhere', column: 't.id', operator: '>=' value: 99},
-      ],
-    }],
-  },
-
-  join: {
-
-  },
-
-  sort: ['t.id'],
-
-  limit: 5,
-
-}
-###
-
-#   unique: {
-
-#   },
-# [{
-#   method: 'where'
-# },
-# {method: 'join',}
-# ]
-
-# Make conditions flat list of condition objects {mehod, column, operator, value}
-# Each condition can contain a conditions array
-# Each item in nested conditions array has its own field key
-# Recurse to add nested conditions
-# Each condition starts its own where block if it had subconditions
-# $or has a conditions array with potentially different keys on each condition
-
 module.exports = class SqlAst
 
   constructor: (options) ->
@@ -121,7 +67,6 @@ module.exports = class SqlAst
     if @query.$include
       @prefix_columns = true
       @join(key, @getRelation(key), {include: true}) for key in @query.$include
-      console.log('joined', ([k, v.columns] for k, v of @joins))
     @_parse(@query, {table: @model_type.tableName()})
 
     @setSelectedColumns()
@@ -144,7 +89,6 @@ module.exports = class SqlAst
     return relation
 
   join: (key, relation, options={}) ->
-    console.log('JOINING', key)
     relation or= @getRelation(key)
     model_type = relation.reverse_relation.model_type
     @joins[key] = _.extend((@joins[key] or {}), {
@@ -185,6 +129,7 @@ module.exports = class SqlAst
     if query?.$ids
       cond = @parseCondition('id', {$in: query.$ids}, {table})
       @where.conditions.push(cond)
+      @abort = true unless query.$ids.length
 
     if query?.$or
       for q in query.$or
@@ -208,11 +153,12 @@ module.exports = class SqlAst
 
     condition = {}
 
-    if _.isObject(value)
+    if _.isObject(value) and not _.isDate(value)
       condition = {method, conditions: []}
 
       if value?.$in
         condition.conditions.push({key, method: 'whereIn', value: value.$in})
+        @abort = true unless value.$in.length
 
       if value?.$nin
         condition.conditions.push({key, method: 'whereNotIn', value: value.$nin})

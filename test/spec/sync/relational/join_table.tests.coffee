@@ -3,7 +3,7 @@ assert = assert or require?('chai').assert
 BackboneORM = window?.BackboneORM; try BackboneORM or= require?('backbone-orm') catch; try BackboneORM or= require?('../../../../backbone-orm')
 {_, Backbone, Queue, Utils, Fabricator} = BackboneORM
 
-_.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
+_.each BackboneORM.TestUtils.optionSets(), exports = (options) ->
   options = _.extend({}, options, __test__parameters) if __test__parameters?
   return if options.embed and not options.sync.capabilities(options.database_url or '').embed
 

@@ -25,10 +25,10 @@ testFn = (options={}) -> (callback) ->
   gutil.log "Running tests for #{options.protocol} #{tags}"
 
   gulp.src([
-      # "node_modules/backbone-orm/test/{issues,spec/sync}/**/*.tests.coffee"
-      # "#{if tags.indexOf('@quick') >= 0 then '' else '{node_modules/backbone-rest/,}'}test/spec/**/*.tests.coffee"
-      'test/spec/sync/relational/many_to_many.tests.coffee'
-      # 'test/spec/sync/relational/*.tests.coffee'
+      "node_modules/backbone-orm/test/{issues,spec/sync}/**/*.tests.coffee"
+      "#{if tags.indexOf('@quick') >= 0 then '' else '{node_modules/backbone-rest/,}'}test/spec/**/*.tests.coffee"
+      # 'test/spec/sync/flat/convenience.tests.coffee'
+      # 'test/spec/sync/**/*.tests.coffee'
     ])
     .pipe(mocha(_.extend({reporter: 'dot', grep: tags}, MOCHA_DATABASE_OPTIONS[options.protocol])))
     .pipe es.writeArray callback

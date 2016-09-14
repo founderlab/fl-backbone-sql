@@ -3,7 +3,7 @@ assert = assert or require?('chai').assert
 BackboneORM = window?.BackboneORM; try BackboneORM or= require?('backbone-orm') catch; try BackboneORM or= require?('../../../../backbone-orm')
 {_, Backbone, Queue, Utils, JSONUtils, Fabricator} = BackboneORM
 
-_.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
+_.each BackboneORM.TestUtils.optionSets(), exports = (options) ->
   options = _.extend({}, options, __test__parameters) if __test__parameters?
   return if options.embed and not options.sync.capabilities(options.database_url or '').embed
 
@@ -1029,8 +1029,6 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
           owner0 = owners[0]; owner0_id = owner0.id; reverse0 = owner0.get('reverse')
           owner1 = owners[1]; owner1_id = owner1.id; reverse1 = owner1.get('reverse')
 
-          console.log('owner0*************************')
-          console.dir(owner0.toJSON(), {depth: null, colors: true})
           assert.ok(owner0.get('reverse'), "Owner0 has 1 reverse.")
           assert.ok(owner1.get('reverse'), "Owner1 has 1 reverse.")
 
