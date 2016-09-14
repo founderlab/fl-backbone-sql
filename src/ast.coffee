@@ -70,7 +70,7 @@ tree = {
 
 module.exports = class SqlAst
 
-  constructor: ->
+  constructor: (options) ->
     @select = []
     @where = {
       method: 'where'
@@ -79,6 +79,7 @@ module.exports = class SqlAst
     @joins = {}
     @sort = null
     @limit = null
+    @parse(options) if options
 
   print: ->
     console.log('********************** AST ******************************')
@@ -92,7 +93,7 @@ module.exports = class SqlAst
     console.log('> select:', @select)
     console.log('> where:')
     console.dir(@where, {depth: null, colors: true})
-    console.log('> joins:', ([k, v.columns] for k, v of @joins))
+    console.log('> joins:', ([key, join.columns] for key, join of @joins))
     console.log('> sort:', @sort)
     console.log('> limit:', @limit)
 
@@ -102,21 +103,22 @@ module.exports = class SqlAst
   parse: (options) ->
     @find = options.find || {}
     @cursor = options.cursor || {}
-    @query = _.extend({}, @find, @cursor)
-    @model_type = options.model_type
+    @query = options.query or _.extend({}, @find, @cursor)
+    throw new Error('Ast requires a model_type option') unless @model_type = options.model_type
+
     @prefix_columns = options.prefix_columns isnt false
 
-    if @cursor.$sort
-      @sort = if _.isArray(@cursor.$sort) then @cursor.$sort else [@cursor.$sort]
+    if @query.$sort
+      @sort = if _.isArray(@query.$sort) then @query.$sort else [@query.$sort]
 
-    @count = true if @cursor.$count
-    @exists = true if @cursor.$exists
-    @limit = @cursor.$limit or (if @cursor.$one then 1 else null)
-    @offset = @cursor.$offset
+    @count = true if @query.$count
+    @exists = true if @query.$exists
+    @limit = @query.$limit or (if @query.$one then 1 else null)
+    @offset = @query.$offset
 
-    if @cursor.$include
+    if @query.$include
       @prefix_columns = true
-      @join(key) for key in @cursor.$include
+      @join(key, @getRelation(key), {include: true}) for key in @query.$include
       console.log('joined', ([k, v.columns] for k, v of @joins))
     @_parse(@query, {table: @model_type.tableName()})
 
@@ -125,6 +127,8 @@ module.exports = class SqlAst
   columnName: (col, table) -> if table and @prefix_columns then "#{table}.#{col}" else col
 
   prefixColumn: (col, table) -> "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
+
+  prefixColumns: (cols, table) -> @prefixColumn(col, table) for col in cols
 
   tablePrefix: (table) -> "#{table}_"
 
@@ -137,16 +141,19 @@ module.exports = class SqlAst
     throw new Error("#{key} is not a relation of #{model_type.model_name}") unless relation = model_type.relation(key)
     return relation
 
-  join: (key, relation) ->
+  join: (key, relation, options={}) ->
     console.log('JOINING', key)
     relation or= @getRelation(key)
     model_type = relation.reverse_relation.model_type
-    @joins[key] or= {
+    @joins[key] = _.extend((@joins[key] or {}), {
       key
       relation
       model_type
       columns: @prefixColumn(col, model_type.tableName()) for col in model_type.schema().columns()
-    }
+    }, options)
+
+  # joinedIncludesWithConditions: -> _(@joins).map((j, k) -> if j.include and j.condition then k else null).compact().value()
+  joinedIncludesWithConditions: -> join for key, join of @joins when (join.include and join.condition)
 
   # Internal parse method that recursively parses the query
   _parse: (query, options={}) ->
@@ -160,7 +167,7 @@ module.exports = class SqlAst
         @prefix_columns = true
         [cond, relation_name, relation] = @parseDotRelation(key, value)
         console.log('[cond, relation_name]', [cond, relation_name])
-        @join(relation_name, relation)
+        @join(relation_name, relation, {condition: true})
         @where.conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
@@ -256,17 +263,17 @@ module.exports = class SqlAst
     @columns = @model_type.schema().columns()
     @columns.unshift('id') unless 'id' in @columns
 
-    if @cursor.$values
-      @fields = if @cursor.$whitelist then _.intersection(@cursor.$values, @cursor.$whitelist) else @cursor.$values
-    else if @cursor.$select
-      @fields = if @cursor.$whitelist then _.intersection(@cursor.$select, @cursor.$whitelist) else @cursor.$select
-    else if @cursor.$whitelist
-      @fields = @cursor.$whitelist
+    if @query.$values
+      @fields = if @query.$whitelist then _.intersection(@query.$values, @query.$whitelist) else @query.$values
+    else if @query.$select
+      @fields = if @query.$whitelist then _.intersection(@query.$select, @query.$whitelist) else @query.$select
+    else if @query.$whitelist
+      @fields = @query.$whitelist
     else
       @fields = @columns
 
     @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
 
-    if @cursor.$include
-      for key in @cursor.$include
+    if @query.$include
+      for key in @query.$include
         @select = @select.concat(@joins[key].columns)

@@ -6,7 +6,7 @@
 
 Knex = require 'knex'
 {_, sync} = require 'backbone-orm'
-SqlAst = require './ast'
+Ast = require './ast'
 
 COMPARATORS =
   $lt: '<'
@@ -206,11 +206,13 @@ buildQueryFromAst = (query, ast, options={}) ->
 
   _appendSelect(query, ast)
   _appendSort(query, ast.sort)
-  _appendLimits(query, ast.limit, ast.offset)
 
-  for key, join of ast.joins
-    console.log('Processing join:', key)
-    _joinToRelation(query, ast.model_type, join.relation)
+  if (_.size(ast.joins))
+    for key, join of ast.joins
+      console.log('Processing join:', key)
+      _joinToRelation(query, ast.model_type, join.relation)
+  else
+    _appendLimits(query, ast.limit, ast.offset)
 
   return query
 
@@ -235,13 +237,10 @@ _unjoinResults = (raw_json, ast, parseJson) ->
       if match = ast.prefixRegex().exec(key)
         model_json[match[1]] = value
 
-      # else if @include_keys
-      #   for include_key in @include_keys
       else
-        for relation_key, join of ast.joins
+        for relation_key, join of ast.joins when join.include
           related_json = (row_relation_json[relation_key] or= {})
-          related_model_type = model_type.relation(relation_key).reverse_relation.model_type
-          if match = ast.prefixRegex(related_model_type.tableName()).exec(key)
+          if match = ast.prefixRegex(join.model_type.tableName()).exec(key)
             related_json[match[1]] = value
 
     # If there was a hasMany relationship or multiple $includes we'll have multiple rows for each model
@@ -317,8 +316,7 @@ module.exports = class SqlCursor extends sync.Cursor
       @_conditions = @_parseConditions(@_find, @_cursor)
 
 
-      ast = new SqlAst()
-      ast.parse({
+      ast = new Ast({
         find: @_find,
         cursor: @_cursor,
         model_type: @model_type,
@@ -369,8 +367,7 @@ module.exports = class SqlCursor extends sync.Cursor
       console.log()
       console.log()
       console.log()
-      ast = new SqlAst()
-      ast.parse({
+      ast = new Ast({
         find: @_find,
         cursor: @_cursor,
         model_type: @model_type,
@@ -393,8 +390,8 @@ module.exports = class SqlCursor extends sync.Cursor
 
     # count and exists when there is not a join table
     if @_cursor.$count or @_cursor.$exists
-      @_appendRelatedWheres(query)
-      @_appendJoinedWheres(query)
+      # @_appendRelatedWheres(query)
+      # @_appendJoinedWheres(query)
 
       return query.exec (err, count_json) =>
         return callback(err) if (err)
@@ -462,11 +459,19 @@ module.exports = class SqlCursor extends sync.Cursor
       console.dir(query.toString(), {depth: null, colors: true})
       console.log '----------'
     query.exec (err, json) =>
-      console.log('json', json)
+
+      console.log('PRE UNJOIN JSON:')
+      console.dir(json, {depth: null, colors: true})
+
       return callback(new Error("Query failed for model: #{@model_type.model_name} with error: #{err}")) if err
       json = _unjoinResults(json, ast, @backbone_adapter.nativeToAttributes) if ast.prefix_columns
-      console.log('json2', json)
-      if @queued_queries
+
+      console.log('UNJOINED JSON:')
+      console.dir(json, {depth: null, colors: true})
+
+      console.log('joinedIncludesWithConditions', ast.joinedIncludesWithConditions())
+
+      if ast.joinedIncludesWithConditions().length
         @_appendCompleteRelations(json, ast, callback)
       else
         @_processResponse(json, ast, callback)
@@ -532,28 +537,57 @@ module.exports = class SqlCursor extends sync.Cursor
           rows: json
         })
     else
-      console.log('\nFINAL:', json)
+      console.log('\nnFINAL JSON:')
+      console.dir(json, {depth: null, colors: true})
+
       callback(null, json)
 
   # Make another query to get the complete set of related objects when they have been fitered by a where clause
   _appendCompleteRelations: (json, ast, callback) ->
-    new_query = @connection(@model_type.tableName())
-    new_query.whereIn(_columnName('id', @model_type.tableName()), _.pluck(json, 'id'))
-    to_columns = []
-    for key in @queued_queries
-      relation = @_getRelation(key)
-      related_model_type = relation.reverse_relation.model_type
-      to_columns = to_columns.concat(@_prefixColumns(related_model_type))
-      @_joinTo(new_query, relation)
+    relation_ast = new Ast({
+      model_type: @model_type
+      query: {
+        id: {$in: _.pluck(json, 'id')}
+        $select: ['id']
+        $include: (j.key for j in ast.joinedIncludesWithConditions())
+      }
+    })
+    relation_query = @connection(@model_type.tableName())
+    relation_query = buildQueryFromAst(relation_query, relation_ast)
 
-    new_query.select((@_prefixColumns(@model_type, ['id'])).concat(to_columns))
-    new_query.exec (err, new_json) =>
+    relation_query.exec (err, raw_relation_json) =>
       return callback(err) if err
-      relation_json = @_joinedResultsToJSON(new_json)
+      relation_json = _unjoinResults(raw_relation_json, relation_ast, @backbone_adapter.nativeToAttributes)
       for placeholder in relation_json
         model = _.find(json, (test) -> test.id is placeholder.id)
         _.extend(model, placeholder)
       @_processResponse(json, ast, callback)
+
+  # # Make another query to get the complete set of related objects when they have been fitered by a where clause
+  # _appendCompleteRelations: (json, ast, callback) ->
+  #   new_ast = new Ast({
+  #     query: {
+  #       $ids: _.pluck(json, 'id')
+  #     }
+  #   })
+
+  #   new_query = @connection(@model_type.tableName())
+  #   new_query.whereIn(_columnName('id', @model_type.tableName()), _.pluck(json, 'id'))
+  #   to_columns = []
+  #   for key in @queued_queries
+  #     relation = @_getRelation(key)
+  #     related_model_type = relation.reverse_relation.model_type
+  #     to_columns = to_columns.concat(@_prefixColumns(related_model_type))
+  #     @_joinTo(new_query, relation)
+
+  #   new_query.select((@_prefixColumns(@model_type, ['id'])).concat(to_columns))
+  #   new_query.exec (err, new_json) =>
+  #     return callback(err) if err
+  #     relation_json = @_joinedResultsToJSON(new_json)
+  #     for placeholder in relation_json
+  #       model = _.find(json, (test) -> test.id is placeholder.id)
+  #       _.extend(model, placeholder)
+  #     @_processResponse(json, ast, callback)
 
   _appendRelatedWheres: (query) ->
     return if _.isEmpty(@_conditions.related_wheres)
