@@ -94,6 +94,8 @@ module.exports = class SqlAst
     console.log('> where:')
     console.dir(@where, {depth: null, colors: true})
     console.log('> joins:', ([key, join.columns] for key, join of @joins))
+    console.log('> count:', @count)
+    console.log('> exists:', @exists)
     console.log('> sort:', @sort)
     console.log('> limit:', @limit)
 
@@ -173,17 +175,12 @@ module.exports = class SqlAst
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
         @prefix_columns = true
         [cond, relation_name, relation] = @parseManyToManyRelation(key, value, reverse_relation)
-        console.log('[cond, relation_name, relation]', [cond, relation_name, relation])
         @join(relation_name, relation, {pivot_only: true})
         @where.conditions.push(cond)
 
       else
         cond = @parseCondition(key, value, {table, method: options.method})
         @where.conditions.push(cond)
-
-    # Parse conditions on related models in the same way
-    # for relation, related_conditions of related_wheres
-    #   conditions.related_wheres[relation] = @_parseConditions(related_conditions)
 
     if query?.$ids
       cond = @parseCondition('id', {$in: query.$ids}, {table})
@@ -195,20 +192,15 @@ module.exports = class SqlAst
 
   parseDotRelation: (key, value) ->
     [relation_name, related_field] = key.split('.')
-    console.log('key, relation_name, related_field', key, relation_name, related_field)
     relation = @getRelation(relation_name)
     cond = @parseCondition(related_field, value, {table: relation.reverse_relation.model_type.tableName()})
     return [cond, relation_name, relation]
-    # related_wheres[relation] or= {}
-    # related_wheres[relation][key] = value
 
   parseManyToManyRelation: (key, value, reverse_relation) ->
     relation = reverse_relation.reverse_relation
     relation_name = relation.key
-    cond = @parseCondition('id', value, {table: relation.join_table.tableName()})
+    cond = @parseCondition(reverse_relation.foreign_key, value, {table: relation.join_table.tableName()})
     return [cond, relation_name, relation]
-    # conditions.joined_wheres[relation.key] or= {wheres: [], or_wheres: [], where_conditionals: []}
-    # _appendCondition(conditions.joined_wheres[relation.key], key, value, method)
 
   parseCondition: (key, value, options={}) ->
     method = options.method || 'where'
@@ -275,6 +267,8 @@ module.exports = class SqlAst
       @fields = if @query.$whitelist then _.intersection(@query.$select, @query.$whitelist) else @query.$select
     else if @query.$whitelist
       @fields = @query.$whitelist
+    else if @query.$ids
+      @fields = ['id']
     else
       @fields = @columns
 

@@ -194,20 +194,18 @@ _appendLimits = (query, limit, offset) ->
 buildQueryFromAst = (query, ast, options={}) ->
   _appendWhereAst(query, ast.where)
 
-  if ast.count or options.count
-    return query.count('*')
-  if ast.exists or options.exists
-    return query.count('*').limit(1)
+  if (_.size(ast.joins))
+    for key, join of ast.joins
+      join_options = {pivot_only: join.pivot_only and not (join.include or join.condition)}
+      _joinToRelation(query, ast.model_type, join.relation, join_options)
+  else
+    _appendLimits(query, ast.limit, ast.offset)
+
+  return query.count('*') if ast.count or options.count
+  return query.count('*').limit(1) if ast.exists or options.exists
 
   _appendSelect(query, ast)
   _appendSort(query, ast.sort)
-
-  if (_.size(ast.joins))
-    for key, join of ast.joins
-      console.log('Processing join:', key)
-      _joinToRelation(query, ast.model_type, join.relation, {pivot_only: (join.pivot_only and not (join.include or join.condition))})
-  else
-    _appendLimits(query, ast.limit, ast.offset)
 
   return query
 
