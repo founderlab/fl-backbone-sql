@@ -18,10 +18,7 @@ module.exports = class SqlAst
 
   constructor: (options) ->
     @select = []
-    @where = {
-      method: 'where'
-      conditions: []
-    }
+    @where = {method: 'where', conditions: []}
     @joins = {}
     @sort = null
     @limit = null
@@ -47,13 +44,15 @@ module.exports = class SqlAst
       @query.$include = [@query.$include] unless _.isArray(@query.$include)
       @prefix_columns = true
       @join(key, @getRelation(key), {include: true}) for key in @query.$include
-    @_parse(@query, {table: @model_type.tableName()})
+
+    @where.conditions = @_parseConditions(@query, {table: @model_type.tableName()})
 
     @setSelectedColumns()
 
   # Internal parse method that recursively parses the query
-  _parse: (query, options={}) ->
+  _parseConditions: (query, options={}) ->
     table = options.table
+    conditions = []
 
     for key, value of query when key[0] isnt '$'
       throw new Error "Unexpected undefined for query key '#{key}'" if _.isUndefined(value)
@@ -62,26 +61,30 @@ module.exports = class SqlAst
       if key.indexOf('.') > 0
         [cond, relation_name, relation] = @parseDotRelation(key, value)
         @join(relation_name, relation, {condition: true})
-        @where.conditions.push(cond)
+        conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
         [cond, relation_name, relation] = @parseManyToManyRelation(key, value, reverse_relation)
         @join(relation_name, relation, {pivot_only: true})
-        @where.conditions.push(cond)
+        conditions.push(cond)
 
       else
         cond = @parseCondition(key, value, {table, method: options.method})
-        @where.conditions.push(cond)
+        conditions.push(cond)
 
     if query?.$ids
       cond = @parseCondition('id', {$in: query.$ids}, {table})
-      @where.conditions.push(cond)
+      conditions.push(cond)
       @abort = true unless query.$ids.length
 
     if query?.$or
+      or_where = {method: 'where', conditions: []}
       for q in query.$or
-        @_parse(q, {table, method: 'orWhere'})
+        or_where.conditions = @_parseConditions(q, {table, method: 'orWhere'})
+      conditions.push(or_where)
+
+    return conditions
 
   parseDotRelation: (key, value) ->
     [relation_name, related_field] = key.split('.')
