@@ -81,7 +81,7 @@ module.exports = class SqlAst
     if query?.$or
       or_where = {method: 'where', conditions: []}
       for q in query.$or
-        or_where.conditions = @_parseConditions(q, {table, method: 'orWhere'})
+        or_where.conditions = or_where.conditions.concat(@_parseConditions(q, {table, method: 'orWhere'}))
       conditions.push(or_where)
 
     return conditions

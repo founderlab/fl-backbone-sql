@@ -79,6 +79,7 @@ module.exports = class SqlCursor extends sync.Cursor
   runQuery: (query, ast, callback) =>
     if @verbose
       console.log '\n----------'
+      ast.print()
       console.dir(query.toString(), {depth: null, colors: true})
       console.log '----------'
 
