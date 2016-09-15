@@ -43,8 +43,8 @@ module.exports = class SqlAst
     @exists = true if @query.$exists
     @limit = @query.$limit or (if @query.$one then 1 else null)
     @offset = @query.$offset
-
     if @query.$include
+      @query.$include = [@query.$include] unless _.isArray(@query.$include)
       @prefix_columns = true
       @join(key, @getRelation(key), {include: true}) for key in @query.$include
     @_parse(@query, {table: @model_type.tableName()})
