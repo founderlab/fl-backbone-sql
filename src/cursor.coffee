@@ -15,8 +15,8 @@ extractCount = (count_json) ->
   return +(count_info[if count_info.hasOwnProperty('count(*)') then 'count(*)' else 'count'])
 
 module.exports = class SqlCursor extends sync.Cursor
-  # verbose: false
-  verbose: true
+  verbose: false
+  # verbose: true
 
   execUnique: (callback) =>
     try
