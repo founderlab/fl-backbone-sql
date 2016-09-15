@@ -15,8 +15,8 @@ extractCount = (count_json) ->
   return +(count_info[if count_info.hasOwnProperty('count(*)') then 'count(*)' else 'count'])
 
 module.exports = class SqlCursor extends sync.Cursor
-  # verbose: false
-  verbose: true
+  verbose: false
+  # verbose: true
 
   execUnique: (callback) =>
     try
@@ -53,6 +53,9 @@ module.exports = class SqlCursor extends sync.Cursor
   queryToJSON: (callback) =>
     return callback(null, if @hasCursorQuery('$one') then null else []) if @hasCursorQuery('$zero')
 
+    @_cursor.$count = true if @hasCursorQuery('$count')
+    @_cursor.$exists = true if @hasCursorQuery('$exists')
+
     # Unique
     return @execUnique(callback) if @_cursor.$unique
 
@@ -82,11 +85,11 @@ module.exports = class SqlCursor extends sync.Cursor
     query.exec (err, json) =>
       return callback(new Error("Query failed for model: #{@model_type.model_name} with error: #{err}")) if err
 
-      if @_cursor.$count or @_cursor.$exists
+      if @hasCursorQuery('$count') or @hasCursorQuery('$exists')
         count = extractCount(json)
-        return callback(null, if @_cursor.$count then count else (count > 0))
+        return callback(null, if @hasCursorQuery('$count') then count else (count > 0))
 
-      json = @unjoinResults(json, ast, @backbone_adapter.nativeToAttributes) if ast.prefix_columns
+      json = @unjoinResults(json, ast) if ast.prefix_columns
 
       if ast.joinedIncludesWithConditions().length
         @fetchIncludedRelations(json, ast, callback)
@@ -151,14 +154,14 @@ module.exports = class SqlCursor extends sync.Cursor
 
     relation_query.exec (err, raw_relation_json) =>
       return callback(err) if err
-      relation_json = @unjoinResults(raw_relation_json, relation_ast, @backbone_adapter.nativeToAttributes)
+      relation_json = @unjoinResults(raw_relation_json, relation_ast)
       for placeholder in relation_json
         model = _.find(json, (test) -> test.id is placeholder.id)
         _.extend(model, placeholder)
       @processResponse(json, ast, callback)
 
   # Rows returned from a join query need to be un-merged into the correct json format
-  unjoinResults: (raw_json, ast, parseJson) =>
+  unjoinResults: (raw_json, ast) =>
     return raw_json unless raw_json and raw_json.length
 
     json = []
@@ -189,15 +192,17 @@ module.exports = class SqlCursor extends sync.Cursor
 
       # Add relations to the model_json if included
       for relation_key, related_json of row_relation_json
+
         if _.isNull(related_json.id)
           if model_type.relation(relation_key).type is 'hasMany'
             model_json[relation_key] = []
           else
             model_json[relation_key] = null
+
         else unless _.isEmpty(related_json)
           reverse_relation_schema = model_type.relation(relation_key).reverse_relation.model_type.schema()
-          related_json = parseJson(related_json, reverse_relation_schema)
-          # related_json = @backbone_adapter.nativeToAttributes(related_json, reverse_relation_schema)
+          related_json = @backbone_adapter.nativeToAttributes(related_json, reverse_relation_schema)
+
           if model_type.relation(relation_key).type is 'hasMany'
             model_json[relation_key] or= []
             model_json[relation_key].push(related_json) unless _.find(model_json[relation_key], (test) -> test.id is related_json.id)

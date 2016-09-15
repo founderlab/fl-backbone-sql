@@ -27,26 +27,6 @@ module.exports = class SqlAst
     @limit = null
     @parse(options) if options
 
-  print: ->
-    console.log('********************** AST ******************************')
-
-    console.log('---- Input ----')
-    console.log('> query:', @query)
-
-    console.log()
-
-    console.log('----  AST  ----')
-    console.log('> select:', @select)
-    console.log('> where:')
-    console.dir(@where, {depth: null, colors: true})
-    console.log('> joins:', ([key, join.columns] for key, join of @joins))
-    console.log('> count:', @count)
-    console.log('> exists:', @exists)
-    console.log('> sort:', @sort)
-    console.log('> limit:', @limit)
-
-    console.log('---------------------------------------------------------')
-
   # Public method that sets up for parsing
   parse: (options) ->
     @find = options.find || {}
@@ -54,7 +34,7 @@ module.exports = class SqlAst
     @query = options.query or _.extend({}, @find, @cursor)
     throw new Error('Ast requires a model_type option') unless @model_type = options.model_type
 
-    @prefix_columns = options.prefix_columns isnt false
+    @prefix_columns = options.prefix_columns
 
     if @query.$sort
       @sort = if _.isArray(@query.$sort) then @query.$sort else [@query.$sort]
@@ -71,36 +51,6 @@ module.exports = class SqlAst
 
     @setSelectedColumns()
 
-  columnName: (col, table) -> if table and @prefix_columns then "#{table}.#{col}" else col
-
-  prefixColumn: (col, table) -> "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
-
-  prefixColumns: (cols, table) -> @prefixColumn(col, table) for col in cols
-
-  tablePrefix: (table) -> "#{table}_"
-
-  prefixRegex: (table) ->
-    table or= @model_type.tableName()
-    new RegExp("^#{@tablePrefix(table)}(.*)$")
-
-  getRelation: (key, model_type) ->
-    model_type or= @model_type
-    throw new Error("#{key} is not a relation of #{model_type.model_name}") unless relation = model_type.relation(key)
-    return relation
-
-  join: (key, relation, options={}) ->
-    relation or= @getRelation(key)
-    model_type = relation.reverse_relation.model_type
-    @joins[key] = _.extend((@joins[key] or {}), {
-      key
-      relation
-      model_type
-      columns: @prefixColumn(col, model_type.tableName()) for col in model_type.schema().columns()
-    }, options)
-
-  # joinedIncludesWithConditions: -> _(@joins).map((j, k) -> if j.include and j.condition then k else null).compact().value()
-  joinedIncludesWithConditions: -> join for key, join of @joins when (join.include and join.condition)
-
   # Internal parse method that recursively parses the query
   _parse: (query, options={}) ->
     table = options.table
@@ -110,14 +60,12 @@ module.exports = class SqlAst
 
       # A dot indicates a condition on a related model
       if key.indexOf('.') > 0
-        @prefix_columns = true
         [cond, relation_name, relation] = @parseDotRelation(key, value)
         @join(relation_name, relation, {condition: true})
         @where.conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
-        @prefix_columns = true
         [cond, relation_name, relation] = @parseManyToManyRelation(key, value, reverse_relation)
         @join(relation_name, relation, {pivot_only: true})
         @where.conditions.push(cond)
@@ -203,6 +151,17 @@ module.exports = class SqlAst
 
     return condition
 
+  join: (key, relation, options={}) ->
+    @prefix_columns = true
+    relation or= @getRelation(key)
+    model_type = relation.reverse_relation.model_type
+    @joins[key] = _.extend((@joins[key] or {}), {
+      key
+      relation
+      model_type
+      columns: @prefixColumn(col, model_type.tableName()) for col in model_type.schema().columns()
+    }, options)
+
   setSelectedColumns: () ->
     @columns = @model_type.schema().columns()
     @columns.unshift('id') unless 'id' in @columns
@@ -213,8 +172,6 @@ module.exports = class SqlAst
       @fields = if @query.$whitelist then _.intersection(@query.$select, @query.$whitelist) else @query.$select
     else if @query.$whitelist
       @fields = @query.$whitelist
-    else if @query.$ids
-      @fields = ['id']
     else
       @fields = @columns
 
@@ -223,3 +180,42 @@ module.exports = class SqlAst
     if @query.$include
       for key in @query.$include
         @select = @select.concat(@joins[key].columns)
+
+  columnName: (col, table) -> "#{table}.#{col}" #if table and @prefix_columns then "#{table}.#{col}" else col
+
+  prefixColumn: (col, table) -> "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
+
+  prefixColumns: (cols, table) -> @prefixColumn(col, table) for col in cols
+
+  tablePrefix: (table) -> "#{table}_"
+
+  prefixRegex: (table) ->
+    table or= @model_type.tableName()
+    new RegExp("^#{@tablePrefix(table)}(.*)$")
+
+  getRelation: (key, model_type) ->
+    model_type or= @model_type
+    throw new Error("#{key} is not a relation of #{model_type.model_name}") unless relation = model_type.relation(key)
+    return relation
+
+  joinedIncludesWithConditions: -> join for key, join of @joins when (join.include and join.condition)
+
+  print: ->
+    console.log('********************** AST ******************************')
+
+    console.log('---- Input ----')
+    console.log('> query:', @query)
+
+    console.log()
+
+    console.log('----  AST  ----')
+    console.log('> select:', @select)
+    console.log('> where:')
+    console.dir(@where, {depth: null, colors: true})
+    console.log('> joins:', ([key, join.columns] for key, join of @joins))
+    console.log('> count:', @count)
+    console.log('> exists:', @exists)
+    console.log('> sort:', @sort)
+    console.log('> limit:', @limit)
+
+    console.log('---------------------------------------------------------')
