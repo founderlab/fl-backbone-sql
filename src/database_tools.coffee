@@ -27,9 +27,8 @@ module.exports = class DatabaseTools
     [callback, options] = [options, {}] if arguments.length is 1
     return callback() if @resetting
     @resetting = true
-
     queue = new Queue(1)
-    queue.defer (callback) => @connection.knex().schema.dropTableIfExists(@table_name).exec callback
+    queue.defer (callback) => @connection.knex().schema.dropTableIfExists(@table_name).asCallback callback
     queue.defer (callback) =>
       join_queue = new Queue(1)
       for join_table in @schema.joinTables()
@@ -95,7 +94,7 @@ module.exports = class DatabaseTools
         @connection.knex().schema[if table_exists then 'table' else 'createTable'](@table_name, (table) =>
           @addColumn(table, column_info) for column_info in result.add
           @updateColumn(table, column_info) for column_info in result.update
-        ).exec(callback)
+        ).asCallback(callback)
     return
 
   addColumn: (table, column_info) =>
@@ -103,19 +102,21 @@ module.exports = class DatabaseTools
 
     # Assign column specific arguments
     constructor_options = _.pick(column_info.options, KNEX_COLUMN_OPTIONS)
+    column_method = column_info.type
+
     unless _.isEmpty(constructor_options)
       # Special case as they take two args
-      if column_info.type in ['float', 'decimal']
+      if column_method in ['float', 'decimal']
         column_args[1] = constructor_options['precision']
         column_args[2] = constructor_options['scale']
      # Use jsonb
-      else if column_info.type in ['json']
-        column_args[1] = true
+      else if column_method in ['json']
+        column_method = 'jsonb'
       # Assume we've been given one valid argument
       else
         column_args[1] = _.values(constructor_options)[0]
 
-    column = table[column_info.type].apply(table, column_args)
+    column = table[column_method].apply(table, column_args)
     column.nullable() if !!column_info.options.nullable
     column.primary() if !!column_info.options.primary
     column.index() if !!column_info.options.indexed
@@ -130,8 +131,8 @@ module.exports = class DatabaseTools
     return
 
   # knex method wrappers
-  hasColumn: (column, callback) => @connection.knex().schema.hasColumn(@table_name, column).exec callback
-  hasTable: (callback) => @connection.knex().schema.hasTable(@table_name).exec callback
-  dropTable: (callback) => @connection.knex().schema.dropTable(@table_name).exec callback
-  dropTableIfExists: (callback) => @connection.knex().schema.dropTableIfExists(@table_name).exec callback
-  renameTable: (to, callback) => @connection.knex().schema.renameTable(@table_name, to).exec callback
+  hasColumn: (column, callback) => @connection.knex().schema.hasColumn(@table_name, column).asCallback callback
+  hasTable: (callback) => @connection.knex().schema.hasTable(@table_name).asCallback callback
+  dropTable: (callback) => @connection.knex().schema.dropTable(@table_name).asCallback callback
+  dropTableIfExists: (callback) => @connection.knex().schema.dropTableIfExists(@table_name).asCallback callback
+  renameTable: (to, callback) => @connection.knex().schema.renameTable(@table_name, to).asCallback callback

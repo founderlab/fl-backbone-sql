@@ -59,7 +59,7 @@
   "dependencies": {
     "backbone": "1.x",
     "backbone-orm": "0.7.x",
-    "knex": "0.6.x",
+    "knex": "0.12.x",
     "lodash": "^4.15.0"
   }
 }

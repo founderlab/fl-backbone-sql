@@ -31,7 +31,7 @@ module.exports = class SqlCursor extends sync.Cursor
 
       if @_cursor.$count
         query.count().from(@connection.distinct(@_cursor.$unique).from(@model_type.tableName()).as('count_query'))
-        return query.exec (err, count_json) => callback(err, extractCount(count_json))
+        return query.asCallback (err, count_json) => callback(err, extractCount(count_json))
 
       # We're not selecting any fields outside of those in $unique, so we can use distinct
       if _.difference(ast.select, @_cursor.$unique).length is 0
@@ -83,7 +83,7 @@ module.exports = class SqlCursor extends sync.Cursor
       console.dir(query.toString(), {depth: null, colors: true})
       console.log '----------'
 
-    query.exec (err, json) =>
+    query.asCallback (err, json) =>
       return callback(new Error("Query failed for model: #{@model_type.model_name} with error: #{err}")) if err
 
       if @hasCursorQuery('$count') or @hasCursorQuery('$exists')
@@ -115,7 +115,7 @@ module.exports = class SqlCursor extends sync.Cursor
         json = json.splice(0, Math.min(json.length, @_cursor.$limit))
 
     if @hasCursorQuery('$page')
-      query = @connection()
+      query = @connection(@model_type.tableName())
       query = buildQueryFromAst(query, ast, {count: true})
 
       if @_cursor.$unique
@@ -130,7 +130,7 @@ module.exports = class SqlCursor extends sync.Cursor
         console.dir query.toString(), {colors: true}
         console.log '---------------------------------------------'
 
-      query.exec (err, count_json) =>
+      query.asCallback (err, count_json) =>
         return callback(err) if err
         callback(null, {
           offset: @_cursor.$offset or 0
@@ -153,7 +153,7 @@ module.exports = class SqlCursor extends sync.Cursor
     relation_query = @connection(@model_type.tableName())
     relation_query = buildQueryFromAst(relation_query, relation_ast)
 
-    relation_query.exec (err, raw_relation_json) =>
+    relation_query.asCallback (err, raw_relation_json) =>
       return callback(err) if err
       relation_json = @unjoinResults(raw_relation_json, relation_ast)
       for placeholder in relation_json
@@ -164,7 +164,6 @@ module.exports = class SqlCursor extends sync.Cursor
   # Rows returned from a join query need to be un-merged into the correct json format
   unjoinResults: (raw_json, ast) =>
     return raw_json unless raw_json and raw_json.length
-
     json = []
     model_type = ast.model_type
 

@@ -25,8 +25,7 @@ module.exports = class Connection
       connection_info = {filename: database_url.host or ':memory:'}
     else
       connection_info = _.extend({host: database_url.hostname, database: database_url.database, charset: 'utf8'}, database_url.parseAuth() or {})
-
-    knex = Knex.initialize({client: protocol, connection: connection_info})
+    knex = Knex({client: protocol, connection: connection_info})
     ConnectionPool.set(@url, @knex_connection = new KnexConnection(knex))
 
   knex: -> return @knex_connection?.knex

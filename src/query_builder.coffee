@@ -27,13 +27,13 @@ joinToRelation = (query, model_type, relation, options={}) ->
     # Join the from model to the pivot table
     from_key = "#{model_type.tableName()}.id"
     pivot_to_key = "#{pivot_table}.#{relation.foreign_key}"
-    query.join(pivot_table, from_key, '=', pivot_to_key, 'left outer')
+    query.leftOuterJoin(pivot_table, from_key, '=', pivot_to_key)
 
     unless options.pivot_only
       # Then to the to model's table (only if we need data from them second table)
       pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
       to_key = "#{related_model_type.tableName()}.id"
-      query.join(related_model_type.tableName(), pivot_from_key, '=', to_key, 'left outer')
+      query.leftOuterJoin(related_model_type.tableName(), pivot_from_key, '=', to_key)
 
   else
     if relation.type is 'belongsTo'
@@ -42,7 +42,7 @@ joinToRelation = (query, model_type, relation, options={}) ->
     else
       from_key = "#{model_type.tableName()}.id"
       to_key = "#{related_model_type.tableName()}.#{relation.foreign_key}"
-    query.join(related_model_type.tableName(), from_key, '=', to_key, 'left outer')
+    query.leftOuterJoin(related_model_type.tableName(), from_key, '=', to_key)
 
 appendWhere = (query, condition) ->
   if !_.isUndefined(condition.key)

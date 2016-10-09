@@ -56,7 +56,7 @@ class SqlSync
   # @no_doc
   create: (model, options) =>
     json = @parseJSON(model.toJSON())
-    @getTable('master').insert(json, 'id').exec (err, res) =>
+    @getTable('master').insert(json, 'id').asCallback (err, res) =>
       return options.error(err) if err
       return options.error(new Error("Failed to create model with attributes: #{JSONUtils.stringify(model.attributes)}")) unless res?.length
       json.id = res[0]
@@ -65,7 +65,7 @@ class SqlSync
   # @no_doc
   update: (model, options) =>
     json = @parseJSON(model.toJSON())
-    @getTable('master').where('id', model.id).update(json).exec (err, res) =>
+    @getTable('master').where('id', model.id).update(json).asCallback (err, res) =>
       return options.error(err) if err
       options.success(json)
 
@@ -74,7 +74,7 @@ class SqlSync
 
   # @nodoc
   deleteCB: (model, callback) =>
-    @getTable('master').where('id', model.id).del().exec (err, res) =>
+    @getTable('master').where('id', model.id).del().asCallback (err, res) =>
       return callback(err) if err
       Utils.patchRemove(@model_type, model, callback)
 
@@ -83,7 +83,7 @@ class SqlSync
   ###################################
 
   parseJSON: (json) ->
-    for key, value of @schema.fields when value.type?.toLowerCase() is 'json' and json[key]
+    for key, value of @schema.fields when value.type?.toLowerCase() in ['json', 'jsonb'] and json[key]
       json[key] = JSON.stringify(json[key])
     return json
 
