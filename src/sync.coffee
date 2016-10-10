@@ -55,8 +55,9 @@ class SqlSync
 
   # @no_doc
   create: (model, options) =>
-    json = @parseJSON(model.toJSON())
-    @getTable('master').insert(json, 'id').asCallback (err, res) =>
+    json = model.toJSON()
+    save_json = @parseJSON(json)
+    @getTable('master').insert(save_json, 'id').asCallback (err, res) =>
       return options.error(err) if err
       return options.error(new Error("Failed to create model with attributes: #{JSONUtils.stringify(model.attributes)}")) unless res?.length
       json.id = res[0]
@@ -64,8 +65,9 @@ class SqlSync
 
   # @no_doc
   update: (model, options) =>
-    json = @parseJSON(model.toJSON())
-    @getTable('master').where('id', model.id).update(json).asCallback (err, res) =>
+    json = model.toJSON()
+    save_json = @parseJSON(json)
+    @getTable('master').where('id', model.id).update(save_json).asCallback (err, res) =>
       return options.error(err) if err
       options.success(json)
 
