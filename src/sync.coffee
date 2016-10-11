@@ -4,7 +4,8 @@
   License: MIT (http://www.opensource.org/licenses/mit-license.php)
 ###
 
-{_, Backbone, Queue, Schema, Utils, JSONUtils, DatabaseURL} = BackboneORM = require 'backbone-orm'
+{Backbone, Queue, Schema, Utils, JSONUtils, DatabaseURL} = BackboneORM = require 'backbone-orm'
+_ = require 'lodash'
 
 SqlCursor = require './cursor'
 DatabaseTools = require './database_tools'
@@ -84,7 +85,8 @@ class SqlSync
   # Backbone ORM - Class Extensions
   ###################################
 
-  parseJSON: (json) ->
+  parseJSON: (_json) ->
+    json = _.clone(_json)
     for key, value of @schema.fields when value.type?.toLowerCase() in ['json', 'jsonb'] and json[key]
       json[key] = JSON.stringify(json[key])
     return json
