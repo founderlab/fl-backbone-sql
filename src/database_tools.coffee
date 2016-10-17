@@ -109,12 +109,13 @@ module.exports = class DatabaseTools
       if column_method in ['float', 'decimal']
         column_args[1] = constructor_options['precision']
         column_args[2] = constructor_options['scale']
-     # Use jsonb
-      else if column_method in ['json']
-        column_method = 'jsonb'
       # Assume we've been given one valid argument
       else
         column_args[1] = _.values(constructor_options)[0]
+
+    # Use jsonb
+    if column_method in ['json']
+      column_method = 'jsonb'
 
     column = table[column_method].apply(table, column_args)
     column.nullable() if !!column_info.options.nullable
