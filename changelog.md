@@ -1,6 +1,6 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
-### 1.2.1
+### 1.3.0
   - Basic support for json queries in arrays
 
 ### 0.6.5
