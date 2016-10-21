@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 1.2.1
+  - Basic support for json queries in arrays
+
 ### 0.6.5
 * Bug fix for missing callback
 * Bug fix $exists checks for nulls
