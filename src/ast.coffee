@@ -49,6 +49,7 @@ module.exports = class SqlAst
 
     @setSelectedColumns()
 
+
   # Internal parse method that recursively parses the query
   _parseConditions: (query, options={}) ->
     table = options.table
@@ -59,8 +60,10 @@ module.exports = class SqlAst
 
       # A dot indicates a condition on a related model
       if key.indexOf('.') > 0
-        [cond, relation_name, relation] = @parseDotRelation(key, value)
-        @join(relation_name, relation, {condition: true})
+        cond = @parseJsonField(key, value)
+        unless cond
+          [cond, relation_name, relation] = @parseDotRelation(key, value)
+          @join(relation_name, relation, {condition: true})
         conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
@@ -85,6 +88,20 @@ module.exports = class SqlAst
       conditions.push(or_where)
 
     return conditions
+
+  parseJsonField: (key, value) ->
+    [json_field, attr] = key.split('.')
+    field = @model_type.schema().fields[json_field]
+
+    if field and field.type.toLowerCase() in ['json', 'jsonb']
+      cond = {
+        method: 'whereRaw'
+        key: "#{json_field} @> ?"
+        value: "[{\"#{attr}\": \"#{value}\"}]"
+      }
+      return cond
+
+    return null
 
   parseDotRelation: (key, value) ->
     [relation_name, related_field] = key.split('.')
@@ -183,6 +200,8 @@ module.exports = class SqlAst
     if @query.$include
       for key in @query.$include
         @select = @select.concat(@joins[key].columns)
+
+  jsonColumnName: (attr, col, table) -> "#{table}->'#{col}'->>'#{attr}'"
 
   columnName: (col, table) -> "#{table}.#{col}" #if table and @prefix_columns then "#{table}.#{col}" else col
 
