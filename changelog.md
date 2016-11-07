@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 1.3.1
+  - Support $in for queries on jsonb arrays
+
 ### 1.3.0
   - Basic support for json queries in arrays
 
