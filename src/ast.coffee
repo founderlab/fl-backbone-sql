@@ -89,11 +89,13 @@ module.exports = class SqlAst
 
     return conditions
 
+  isJsonField: (json_field) ->
+    field = @model_type.schema().fields[json_field]
+    return field and field.type.toLowerCase() in ['json', 'jsonb']
+
   parseJsonField: (key, value) ->
     [json_field, attr] = key.split('.')
-    field = @model_type.schema().fields[json_field]
-
-    if field and field.type.toLowerCase() in ['json', 'jsonb']
+    if @isJsonField(json_field)
       cond = {
         method: 'whereRaw'
         key: "#{json_field} @> ?"
@@ -115,9 +117,9 @@ module.exports = class SqlAst
     cond = @parseCondition(reverse_relation.foreign_key, value, {table: relation.join_table.tableName()})
     return [cond, relation_name, relation]
 
-  parseCondition: (key, value, options={}) ->
+  parseCondition: (_key, value, options={}) ->
     method = options.method || 'where'
-    key = @columnName(key, options.table)
+    key = @columnName(_key, options.table)
 
     condition = {}
 
@@ -125,8 +127,23 @@ module.exports = class SqlAst
       condition = {method, conditions: []}
 
       if value?.$in
-        condition.conditions.push({key, method: 'whereIn', value: value.$in})
-        @abort = true unless value.$in.length
+        unless value.$in.length
+          @abort = true
+          return condition
+
+        if @isJsonField(_key)
+          for val in value.$in
+            condition.conditions.push({
+              method: 'orWhere'
+              conditions: [{
+                method: 'whereRaw'
+                key: '?? \\? ?'
+                value: [key, val]
+              }]
+            })
+          return condition
+        else
+          condition.conditions.push({key, method: 'whereIn', value: value.$in})
 
       if value?.$nin
         condition.conditions.push({key, method: 'whereNotIn', value: value.$nin})

@@ -53,6 +53,10 @@ module.exports = class SqlCursor extends sync.Cursor
   queryToJSON: (callback) =>
     return callback(null, if @hasCursorQuery('$one') then null else []) if @hasCursorQuery('$zero')
 
+    @verbose or= @_cursor.$verbose
+    if @verbose
+      @start_time = new Date().getTime()
+
     @_cursor.$count = true if @hasCursorQuery('$count')
     @_cursor.$exists = true if @hasCursorQuery('$exists')
 
@@ -76,12 +80,19 @@ module.exports = class SqlCursor extends sync.Cursor
 
     @runQuery query, ast, callback
 
-  runQuery: (query, ast, callback) =>
+  runQuery: (query, ast, _callback) =>
+    callback = _callback
     if @verbose
+      @query_ready_time = new Date().getTime()
+
       console.log '\n----------'
       ast.print()
       console.dir(query.toString(), {depth: null, colors: true})
+      console.log('Built in', @query_ready_time-@start_time, 'ms')
       console.log '----------'
+      callback = (err, res) =>
+        console.log('Query complete in', new Date().getTime() - @start_time, 'ms')
+        _callback(err, res)
 
     query.asCallback (err, json) =>
       return callback(new Error("Query failed for model: #{@model_type.model_name} with error: #{err}")) if err
