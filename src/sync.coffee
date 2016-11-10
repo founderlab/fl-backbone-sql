@@ -62,7 +62,7 @@ class SqlSync
       return options.error(err) if err
       return options.error(new Error("Failed to create model with attributes: #{JSONUtils.stringify(model.attributes)}")) unless res?.length
       json.id = res[0]
-      options.success(json)
+      options.success(@backbone_adapter.nativeToAttributes(json, @schema))
 
   # @no_doc
   update: (model, options) =>
@@ -70,7 +70,7 @@ class SqlSync
     save_json = @parseJSON(json)
     @getTable('master').where('id', model.id).update(save_json).asCallback (err, res) =>
       return options.error(err) if err
-      options.success(json)
+      options.success(@backbone_adapter.nativeToAttributes(json, @schema))
 
   # @nodoc
   delete: (model, options) -> @deleteCB(model, (err) => if err then options.error(err) else options.success())

@@ -17,9 +17,16 @@ module.exports = class SqlBackboneAdapter
         catch err
           # console.log(err)
 
+      # Make join table ids strings
+      else if key.endsWith('_id') and json[key]
+        json[key] = json[key].toString()
+
+    # Make primary key and foreign keys strings
     json.id = json.id.toString() if json.id
     for key, relation of schema.relations
-      if relation.type is 'belongsTo' and json[relation.foreign_key]
-        json[relation.foreign_key] = json[relation.foreign_key].toString()
+      if relation.type is 'belongsTo'
+        foreign_key = relation.foreign_key
+      if foreign_key and json[foreign_key]
+        json[foreign_key] = json[foreign_key].toString()
 
     return json
