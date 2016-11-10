@@ -16,4 +16,10 @@ module.exports = class SqlBackboneAdapter
           json[key] = JSON.parse(json[key])
         catch err
           # console.log(err)
+
+    json.id = json.id.toString() if json.id
+    for key, relation of schema.relations
+      if relation.type is 'belongsTo' and json[relation.foreign_key]
+        json[relation.foreign_key] = json[relation.foreign_key].toString()
+
     return json

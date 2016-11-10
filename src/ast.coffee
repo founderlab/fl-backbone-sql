@@ -45,13 +45,12 @@ module.exports = class SqlAst
       @prefix_columns = true
       @join(key, @getRelation(key), {include: true}) for key in @query.$include
 
-    @where.conditions = @_parseConditions(@query, {table: @model_type.tableName()})
+    @where.conditions = @parseQuery(@query, {table: @model_type.tableName()})
 
     @setSelectedColumns()
 
-
   # Internal parse method that recursively parses the query
-  _parseConditions: (query, options={}) ->
+  parseQuery: (query, options={}) ->
     table = options.table
     conditions = []
 
@@ -84,7 +83,7 @@ module.exports = class SqlAst
     if query?.$or
       or_where = {method: 'where', conditions: []}
       for q in query.$or
-        or_where.conditions = or_where.conditions.concat(@_parseConditions(q, {table, method: 'orWhere'}))
+        or_where.conditions = or_where.conditions.concat(@parseQuery(q, {table, method: 'orWhere'}))
       conditions.push(or_where)
 
     return conditions
