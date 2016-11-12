@@ -1,5 +1,9 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.1.2
+  - Use full table.column names for sort fields
+  - Use reverse_model_type to get related model in case reverse_relation isnt present
+
 ### 2.1.0
   - Handle queries spanning multiple relations, e.g. {'profiles.users.email': 'smth@example.com'}
   - A join will be made on each relation in the query chain.
