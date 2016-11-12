@@ -105,7 +105,7 @@ module.exports = class SqlAst
       current_relation_key = relation_keys.shift()
       current_relation = @getRelation(current_relation_key, current_model_type)
       @join(current_relation_key, current_relation)
-      current_model_type = current_relation.reverse_relation.model_type
+      current_model_type = current_relation.reverse_model_type
 
     cond = @parseCondition(relation_field, value, {related: true, table: current_model_type.tableName()})
     return cond
@@ -113,7 +113,7 @@ module.exports = class SqlAst
   join: (relation_key, relation, options={}) ->
     @prefix_columns = true
     relation or= @getRelation(relation_key)
-    model_type = relation.reverse_relation.model_type
+    model_type = relation.reverse_model_type
     @joins[relation_key] = _.extend((@joins[relation_key] or {}), {
       relation
       key: relation_key

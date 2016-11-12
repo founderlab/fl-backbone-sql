@@ -20,7 +20,7 @@ module.exports = buildQueryFromAst = (query, ast, options={}) ->
 # Make another query to get the complete set of related objects when they have been fitered by a where clause
 joinToRelation = (query, relation, options={}) ->
   model_type = relation.model_type
-  related_model_type = relation.reverse_relation.model_type
+  related_model_type = relation.reverse_model_type
 
   if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
     pivot_table = relation.join_table.tableName()
