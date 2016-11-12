@@ -59,16 +59,18 @@ module.exports = class SqlAst
 
       # A dot indicates a condition on a related model
       if key.indexOf('.') > 0
-        cond = @parseJsonField(key, value)
-        unless cond
-          [cond, relation_name, relation] = @parseDotRelation(key, value)
-          @join(relation_name, relation, {condition: true})
-        conditions.push(cond)
+        if cond = @parseJsonField(key, value)
+          conditions.push(cond)
+        else
+          cond = @parseDotRelation(key, value)
+          # [cond, relation_key, relation] = @parseDotRelation(key, value)
+          # @join(relation_key, relation, {condition: true})
+          conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
       else if (reverse_relation = @model_type.reverseRelation(key)) and reverse_relation.join_table
-        [cond, relation_name, relation] = @parseManyToManyRelation(key, value, reverse_relation)
-        @join(relation_name, relation, {pivot_only: true})
+        [cond, relation_key, relation] = @parseManyToManyRelation(key, value, reverse_relation)
+        @join(relation_key, relation, {pivot_only: true})
         conditions.push(cond)
 
       else
@@ -86,7 +88,38 @@ module.exports = class SqlAst
         or_where.conditions = or_where.conditions.concat(@parseQuery(q, {table, method: 'orWhere'}))
       conditions.push(or_where)
 
+    console.log('parseQuery', query)
+    if query?.$and
+      and_where = {method: 'where', conditions: []}
+      for q in query.$and
+        and_where.conditions = and_where.conditions.concat(@parseQuery(q, {table}))
+      conditions.push(and_where)
+
     return conditions
+
+  parseDotRelation: (key, value) ->
+    relation_keys = key.split('.')
+    relation_field = relation_keys.pop()
+
+    current_model_type = @model_type
+    while relation_keys.length
+      current_relation_key = relation_keys.shift()
+      current_relation = @getRelation(current_relation_key, current_model_type)
+      @join(current_relation_key, current_relation)
+      current_model_type = current_relation.reverse_relation.model_type
+
+    cond = @parseCondition(relation_field, value, {related: true, table: current_model_type.tableName()})
+    return cond
+
+  join: (relation_key, relation, options={}) ->
+    @prefix_columns = true
+    relation or= @getRelation(relation_key)
+    model_type = relation.reverse_relation.model_type
+    @joins[relation_key] = _.extend((@joins[relation_key] or {}), {
+      relation
+      key: relation_key
+      columns: @prefixColumn(col, model_type.tableName()) for col in model_type.schema().columns()
+    }, options)
 
   isJsonField: (json_field) ->
     field = @model_type.schema().fields[json_field]
@@ -104,26 +137,19 @@ module.exports = class SqlAst
 
     return null
 
-  parseDotRelation: (key, value) ->
-    [relation_name, related_field] = key.split('.')
-    relation = @getRelation(relation_name)
-    cond = @parseCondition(related_field, value, {table: relation.reverse_relation.model_type.tableName()})
-    return [cond, relation_name, relation]
-
   parseManyToManyRelation: (key, value, reverse_relation) ->
     relation = reverse_relation.reverse_relation
-    relation_name = relation.key
-    cond = @parseCondition(reverse_relation.foreign_key, value, {table: relation.join_table.tableName()})
-    return [cond, relation_name, relation]
+    relation_key = relation.key
+    cond = @parseCondition(reverse_relation.foreign_key, value, {related: true, table: relation.join_table.tableName()})
+    return [cond, relation_key, relation]
 
   parseCondition: (_key, value, options={}) ->
     method = options.method || 'where'
     key = @columnName(_key, options.table)
 
-    condition = {}
+    condition = {method, conditions: [], related: options.related}
 
     if _.isObject(value) and not _.isDate(value)
-      condition = {method, conditions: []}
 
       if value?.$in
         unless value.$in.length
@@ -180,23 +206,12 @@ module.exports = class SqlAst
 
     else
       method = "#{method}Null" if method in ['where', 'orWhere'] and _.isNull(value)
-      condition = {key, value, method}
+      _.extend(condition, {key, value, method})
 
     if _.isArray(condition.conditions) and condition.conditions.length is 1
       return condition.conditions[0]
 
     return condition
-
-  join: (key, relation, options={}) ->
-    @prefix_columns = true
-    relation or= @getRelation(key)
-    model_type = relation.reverse_relation.model_type
-    @joins[key] = _.extend((@joins[key] or {}), {
-      key
-      relation
-      model_type
-      columns: @prefixColumn(col, model_type.tableName()) for col in model_type.schema().columns()
-    }, options)
 
   setSelectedColumns: () ->
     @columns = @model_type.schema().columns()
