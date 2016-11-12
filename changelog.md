@@ -1,5 +1,14 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.1.0
+  - Handle queries spanning multiple relations, e.g. {'profiles.users.email': 'smth@example.com'}
+  - A join will be made on each relation in the query chain.
+
+### 2.0.0
+  - Potentially breaking change: All ids are now parsed into strings by default. 
+    - This means that all ids, whether they came from backbone-sql or backbone-mongo, 
+      will be of the same type.
+
 ### 1.3.1
   - Support $in for queries on jsonb arrays
 
