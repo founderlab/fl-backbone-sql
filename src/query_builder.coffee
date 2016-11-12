@@ -12,7 +12,7 @@ module.exports = buildQueryFromAst = (query, ast, options={}) ->
 
   appendLimits(query, ast.limit, ast.offset) unless _.size(ast.joins)
   appendSelect(query, ast)
-  appendSort(query, ast.sort)
+  appendSort(query, ast)
 
   return query
 
@@ -60,19 +60,13 @@ appendWhere = (query, condition) ->
 
   return query
 
-module.exports.parseSortField = parseSortField = (sort) ->
-  return [sort.substr(1), 'desc'] if sort[0] is '-'
-  return [sort, 'asc']
-
 appendSelect = (query, ast) ->
   query.select(ast.select)
   return query
 
-appendSort = (query, sort_fields) ->
-  return query unless sort_fields
-  for sort in sort_fields
-    [col, dir] = parseSortField(sort)
-    query.orderBy(col, dir)
+appendSort = (query, ast) ->
+  return query unless ast.sort
+  query.orderBy(sort.column, sort.direction) for sort in ast.sort
   return query
 
 appendLimits = (query, limit, offset) ->

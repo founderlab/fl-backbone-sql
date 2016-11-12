@@ -8,6 +8,7 @@ Knex = require 'knex'
 {_, sync} = require 'backbone-orm'
 Ast = require './ast'
 buildQueryFromAst = require './query_builder'
+Utils = require './lib/utils'
 
 extractCount = (count_json) ->
   return 0 unless count_json?.length
@@ -40,7 +41,7 @@ module.exports = class SqlCursor extends sync.Cursor
       # Other fields are required - uses partition, a postgres window function
       else
         rank_field = @_cursor.$unique[0]
-        [sort_field, sort_dir] = require('./query_builder').parseSortField(ast.sort?[0] or 'id')
+        [sort_field, sort_dir] = Utils.parseSortField(ast.sort?[0] or 'id')
         subquery = @connection.select(@connection.raw("#{ast.select.join(', ')}, rank() over (partition by #{rank_field} order by #{sort_field} #{sort_dir})"))
         subquery.from(@model_type.tableName()).as('subquery')
         query.select(ast.select).from(subquery).where('rank', 1)

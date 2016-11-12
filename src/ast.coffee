@@ -4,6 +4,7 @@
   License: MIT (http://www.opensource.org/licenses/mit-license.php)
 ###
 _ = require 'lodash'
+Utils = require './lib/utils'
 
 COMPARATORS =
   $lt: '<'
@@ -33,9 +34,6 @@ module.exports = class SqlAst
 
     @prefix_columns = options.prefix_columns
 
-    if @query.$sort
-      @sort = if _.isArray(@query.$sort) then @query.$sort else [@query.$sort]
-
     @count = true if @query.$count
     @exists = true if @query.$exists
     @limit = @query.$limit or (if @query.$one then 1 else null)
@@ -47,6 +45,7 @@ module.exports = class SqlAst
 
     @where.conditions = @parseQuery(@query, {table: @model_type.tableName()})
 
+    @setSortFields(@query.$sort)
     @setSelectedColumns()
 
   # Internal parse method that recursively parses the query
@@ -212,6 +211,19 @@ module.exports = class SqlAst
 
     return condition
 
+  # Set up sort columns
+  setSortFields: (sort) ->
+    return unless sort
+    @sort = []
+    to_sort = if _.isArray(@query.$sort) then @query.$sort else [@query.$sort]
+    for sort_key in to_sort
+      [column, direction] = Utils.parseSortField(sort_key)
+      if @prefix_columns and '.' not in column
+        @sort.push({column: @columnName(column, @model_type.tableName()), direction})
+      else
+        @sort.push({column, direction})
+
+  # Ensure that column references have table prefixes where required
   setSelectedColumns: () ->
     @columns = @model_type.schema().columns()
     @columns.unshift('id') unless 'id' in @columns
@@ -226,9 +238,6 @@ module.exports = class SqlAst
       @fields = @columns
 
     @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
-
-    if @sort and @prefix_columns
-      @sort = (@columnName(s, @model_type.tableName()) for s in @sort when '.' not in s)
 
     if @query.$include
       for key in @query.$include
