@@ -227,6 +227,9 @@ module.exports = class SqlAst
 
     @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
 
+    if @sort and @prefix_columns
+      @sort = (@columnName(s, @model_type.tableName()) for s in @sort when '.' not in s)
+
     if @query.$include
       for key in @query.$include
         @select = @select.concat(@joins[key].columns)
