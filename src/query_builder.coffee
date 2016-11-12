@@ -5,7 +5,7 @@ module.exports = buildQueryFromAst = (query, ast, options={}) ->
 
   for key, join of ast.joins
     join_options = {pivot_only: join.pivot_only and not (join.include or join.condition)}
-    joinToRelation(query, ast.model_type, join.relation, join_options)
+    joinToRelation(query, join.relation, join_options)
 
   return query.count('*') if ast.count or options.count
   return query.count('*').limit(1) if ast.exists or options.exists
@@ -18,7 +18,8 @@ module.exports = buildQueryFromAst = (query, ast, options={}) ->
 
 # TODO: look at optimizing without left outer joins everywhere
 # Make another query to get the complete set of related objects when they have been fitered by a where clause
-joinToRelation = (query, model_type, relation, options={}) ->
+joinToRelation = (query, relation, options={}) ->
+  model_type = relation.model_type
   related_model_type = relation.reverse_relation.model_type
 
   if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
