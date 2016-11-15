@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.1.3
+  - Fix bug with $include
+
 ### 2.1.2
   - Use full table.column names for sort fields
   - Use reverse_model_type to get related model in case reverse_relation isnt present
