@@ -106,7 +106,7 @@ module.exports = class SqlAst
       @join(current_relation_key, current_relation)
       current_model_type = current_relation.reverse_model_type
 
-    cond = @parseCondition(relation_field, value, {related: true, table: current_model_type.tableName()})
+    cond = @parseCondition(relation_field, value, {related: true, model_type: current_model_type, table: current_model_type.tableName()})
     return cond
 
   join: (relation_key, relation, options={}) ->
@@ -119,8 +119,9 @@ module.exports = class SqlAst
       columns: @prefixColumn(col, model_type.tableName()) for col in model_type.schema().columns()
     }, options)
 
-  isJsonField: (json_field) ->
-    field = @model_type.schema().fields[json_field]
+  isJsonField: (json_field, model_type) ->
+    model_type or= @model_type
+    field = model_type.schema().fields[json_field]
     return field and field.type.toLowerCase() in ['json', 'jsonb']
 
   parseJsonField: (key, value) ->
@@ -138,7 +139,7 @@ module.exports = class SqlAst
   parseManyToManyRelation: (key, value, reverse_relation) ->
     relation = reverse_relation.reverse_relation
     relation_key = relation.key
-    cond = @parseCondition(reverse_relation.foreign_key, value, {related: true, table: relation.join_table.tableName()})
+    cond = @parseCondition(reverse_relation.foreign_key, value, {related: true, model_type: relation.model_type, table: relation.join_table.tableName()})
     return [cond, relation_key, relation]
 
   parseCondition: (_key, value, options={}) ->
@@ -154,14 +155,14 @@ module.exports = class SqlAst
           @abort = true
           return condition
 
-        if @isJsonField(_key)
+        if @isJsonField(_key) or options.related and @isJsonField(_key, options.model_type)
           for val in value.$in
             condition.conditions.push({
               method: 'orWhere'
               conditions: [{
-                method: 'whereRaw'
                 key: '?? \\? ?'
                 value: [key, val]
+                method: 'whereRaw'
               }]
             })
           return condition
@@ -203,8 +204,15 @@ module.exports = class SqlAst
             condition.conditions.push({key, operator, method, value: val})
 
     else
-      method = "#{method}Null" if method in ['where', 'orWhere'] and _.isNull(value)
-      _.extend(condition, {key, value, method})
+      if @isJsonField(_key) or options.related and @isJsonField(_key, options.model_type)
+        _.extend(condition, {
+          key: '?? \\? ?'
+          value: [key, value]
+          method: 'whereRaw'
+        })
+      else
+        method = "#{method}Null" if method in ['where', 'orWhere'] and _.isNull(value)
+        _.extend(condition, {key, value, method})
 
     if _.isArray(condition.conditions) and condition.conditions.length is 1
       return condition.conditions[0]
