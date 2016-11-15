@@ -192,7 +192,7 @@ module.exports = class SqlCursor extends sync.Cursor
         else
           for relation_key, join of ast.joins when join.include
             related_json = (row_relation_json[relation_key] or= {})
-            if match = ast.prefixRegex(join.model_type.tableName()).exec(key)
+            if match = ast.prefixRegex(join.relation.reverse_model_type.tableName()).exec(key)
               related_json[match[1]] = value
 
       # If there was a hasMany relationship or multiple $includes we'll have multiple rows for each model
@@ -212,7 +212,7 @@ module.exports = class SqlCursor extends sync.Cursor
             model_json[relation_key] = null
 
         else unless _.isEmpty(related_json)
-          reverse_relation_schema = model_type.relation(relation_key).reverse_relation.model_type.schema()
+          reverse_relation_schema = model_type.relation(relation_key).reverse_model_type.schema()
           related_json = @backbone_adapter.nativeToAttributes(related_json, reverse_relation_schema)
 
           if model_type.relation(relation_key).type is 'hasMany'
