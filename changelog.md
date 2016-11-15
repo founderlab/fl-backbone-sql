@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.1.4
+  - Add support for related json arrays ({'relation.jsonField': 'something'})
+
 ### 2.1.3
   - Fix bug with $include
 
