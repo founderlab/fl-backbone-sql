@@ -11,7 +11,7 @@ module.exports = class SqlBackboneAdapter
     for key, value of schema.fields
       if schema.fields[key] and schema.fields[key].type is 'Boolean' and json[key] isnt null
         json[key] = !!json[key]
-      else if value.type?.toLowerCase() is 'json' and json[key]
+      else if value.type?.toLowerCase() is 'json' and json[key] and _.isString(json[key])
         try
           json[key] = JSON.parse(json[key])
         catch err
