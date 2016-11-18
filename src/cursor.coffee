@@ -194,6 +194,9 @@ module.exports = class SqlCursor extends sync.Cursor
             related_json = (row_relation_json[relation_key] or= {})
             if match = ast.prefixRegex(join.relation.reverse_model_type.tableName()).exec(key)
               related_json[match[1]] = value
+              found = true
+          unless found
+            model_json[key] = value
 
       # If there was a hasMany relationship or multiple $includes we'll have multiple rows for each model
       if found = _.find(json, (test) -> test.id is model_json.id)
@@ -222,3 +225,26 @@ module.exports = class SqlCursor extends sync.Cursor
             model_json[relation_key] = related_json
 
     return json
+
+  selectResults: (json) ->
+    json = json.slice(0, 1) if @_cursor.$one
+
+    # TODO: OPTIMIZE TO REMOVE 'id' and '_rev' if needed
+    if @_cursor.$values
+      $values = if @_cursor.$whitelist then _.intersection(@_cursor.$values, @_cursor.$whitelist) else @_cursor.$values
+      if @_cursor.$values.length is 1
+        key = @_cursor.$values[0]
+        json = if $values.length then ((if item.hasOwnProperty(key) then item[key] else null) for item in json) else _.map(json, -> null)
+      else
+        json = (((item[key] for key in $values when item.hasOwnProperty(key))) for item in json)
+
+    else if @_cursor.$select
+      $select = ((if '.' in field then field.split('.').pop() else field) for field in @_cursor.$select)
+      $select = _.intersection($select, @_cursor.$whitelist) if @_cursor.$whitelist
+      json = (_.pick(item, $select) for item in json)
+
+    else if @_cursor.$whitelist
+      json = (_.pick(item, @_cursor.$whitelist) for item in json)
+
+    return json if @hasCursorQuery('$page') # paging expects an array
+    return if @_cursor.$one then (json[0] or null) else json

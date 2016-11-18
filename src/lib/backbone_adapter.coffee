@@ -17,9 +17,9 @@ module.exports = class SqlBackboneAdapter
         catch err
           # console.log(err)
 
-      # Make join table ids strings
-      else if key.endsWith('_id') and json[key]
-        json[key] = json[key].toString()
+    # Make join table ids strings
+    for key, value of json when key.endsWith('_id') and value
+      json[key] = value.toString()
 
     # Make primary key and foreign keys strings
     json.id = json.id.toString() if json.id

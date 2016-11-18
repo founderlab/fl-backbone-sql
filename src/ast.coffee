@@ -245,7 +245,9 @@ module.exports = class SqlAst
     else
       @fields = @columns
 
-    @select = if @prefix_columns then (@prefixColumn(col, @model_type.tableName()) for col in @fields) else @fields
+    @select = []
+    for col in @fields
+      @select.push(if @prefix_columns then @prefixColumn(col, @model_type.tableName()) else col)
 
     if @query.$include
       for key in @query.$include
@@ -255,7 +257,9 @@ module.exports = class SqlAst
 
   columnName: (col, table) -> "#{table}.#{col}" #if table and @prefix_columns then "#{table}.#{col}" else col
 
-  prefixColumn: (col, table) -> "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
+  prefixColumn: (col, table) ->
+    return col if '.' in col
+    return "#{table}.#{col} as #{@tablePrefix(table)}#{col}"
 
   prefixColumns: (cols, table) -> @prefixColumn(col, table) for col in cols
 
