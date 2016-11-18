@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.1.5
+  - Accept related fields in $select (provided they are included either with $include or a query on that relation) ({$select: ['id', 'users.profile_id'})
+
 ### 2.1.4
   - Add support for related json arrays ({'relation.jsonField': 'something'})
 
