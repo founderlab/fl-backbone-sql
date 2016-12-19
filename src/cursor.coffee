@@ -41,8 +41,12 @@ module.exports = class SqlCursor extends sync.Cursor
       # Other fields are required - uses partition, a postgres window function
       else
         rank_field = @_cursor.$unique[0]
-        [sort_field, sort_dir] = Utils.parseSortField(ast.sort?[0] or 'id')
-        subquery = @connection.select(@connection.raw("#{ast.select.join(', ')}, rank() over (partition by #{rank_field} order by #{sort_field} #{sort_dir})"))
+        raw_query = "#{ast.select.join(', ')}, rank() over (partition by #{rank_field}"
+        if sort = ast.sort.shift()
+          raw_query += " order by #{sort.column} #{sort.direction})"
+        for sort in ast.sort?
+          raw_query += " , #{sort.column} #{sort.direction})"
+        subquery = @connection.select(@connection.raw(raw_query))
         subquery.from(@model_type.tableName()).as('subquery')
         query.select(ast.select).from(subquery).where('rank', 1)
 
