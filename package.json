@@ -48,13 +48,14 @@
     "express": "3.x",
     "gulp": "*",
     "gulp-coffee": "*",
-    "gulp-spawn-mocha": "*",
+    "gulp-spawn-mocha": "2.x",
     "gulp-util": "*",
     "mocha": "2.x",
     "mysql": "2.x",
     "pg": "4.x",
     "sqlite3": "3.x",
-    "supertest": "0.13.x"
+    "supertest": "0.13.x",
+    "underscore": "*"
   },
   "dependencies": {
     "backbone": "1.x",
