@@ -105,8 +105,8 @@ module.exports = class SqlAst
       current_relation = @getRelation(current_relation_key, current_model_type)
       @join(current_relation_key, current_relation)
       current_model_type = current_relation.reverse_model_type
+    cond = @parseCondition(relation_field, value, {related: current_relation, model_type: current_model_type, table: current_model_type.tableName()})
 
-    cond = @parseCondition(relation_field, value, {related: true, model_type: current_model_type, table: current_model_type.tableName()})
     return cond
 
   join: (relation_key, relation, options={}) ->
@@ -139,7 +139,7 @@ module.exports = class SqlAst
   parseManyToManyRelation: (key, value, reverse_relation) ->
     relation = reverse_relation.reverse_relation
     relation_key = relation.key
-    cond = @parseCondition(reverse_relation.foreign_key, value, {related: true, model_type: relation.model_type, table: relation.join_table.tableName()})
+    cond = @parseCondition(reverse_relation.foreign_key, value, {related: relation, model_type: relation.model_type, table: relation.join_table.tableName()})
     return [cond, relation_key, relation]
 
   parseCondition: (_key, value, options={}) ->
@@ -154,7 +154,6 @@ module.exports = class SqlAst
         unless value.$in.length
           @abort = true
           return condition
-
         if @isJsonField(_key) or options.related and @isJsonField(_key, options.model_type)
           for val in value.$in
             condition.conditions.push({
@@ -167,18 +166,18 @@ module.exports = class SqlAst
             })
           return condition
         else
-          condition.conditions.push({key, method: 'whereIn', value: value.$in})
+          condition.conditions.push({key, method: 'whereIn', value: value.$in, related: options.related})
 
       if value?.$nin
-        condition.conditions.push({key, method: 'whereNotIn', value: value.$nin})
+        condition.conditions.push({key, method: 'whereNotIn', value: value.$nin, related: options.related})
 
       if value?.$exists?
-        condition.conditions.push({key, method: (if value?.$exists then 'whereNotNull' else 'whereNull')})
+        condition.conditions.push({key, method: (if value?.$exists then 'whereNotNull' else 'whereNull'), related: options.related})
 
       # Transform a conditional of type {key: {$like: 'string'}} to ('key', 'like', '%string%')
       if _.isObject(value) and value.$like
         val = if '%' in value.$like then value.$like else "%#{value.$like}%"
-        condition.conditions.push({key, method, operator: 'ilike', value: val})
+        condition.conditions.push({key, method, operator: 'ilike', value: val, related: options.related})
 
       # Transform a conditional of type {key: {$lt: 5, $gt: 3}} to [('key', '<', 5), ('key', '>', 3)]
       if _.size(mongo_conditions = _.pick(value, COMPARATOR_KEYS))
@@ -187,21 +186,21 @@ module.exports = class SqlAst
 
           if mongo_op is '$ne'
             if _.isNull(val)
-              condition.conditions.push({key, method: "#{method}NotNull"})
+              condition.conditions.push({key, method: "#{method}NotNull"}, related: options.related)
             else
               condition.conditions.push({method, conditions: [
-                {key, operator, method: 'orWhere', value: val}
-                {key, method: 'orWhereNull'}
+                {key, operator, method: 'orWhere', value: val, related: options.related}
+                {key, method: 'orWhereNull', related: options.related}
               ]})
 
           else if _.isNull(val)
             if mongo_op is '$eq'
-              condition.conditions.push({key, method: "#{method}Null"})
+              condition.conditions.push({key, method: "#{method}Null", related: options.related})
             else
               throw new Error "Unexpected null with query key '#{key}': '#{mongo_conditions}'"
 
           else
-            condition.conditions.push({key, operator, method, value: val})
+            condition.conditions.push({key, operator, method, value: val, related: options.related})
 
     else
       if @isJsonField(_key) or options.related and @isJsonField(_key, options.model_type)
