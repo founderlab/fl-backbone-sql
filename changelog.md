@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.2.0
+  - Queries on related models no longer require a full join, so $limit and $offset work (thanks @kenhg!)
+
 ### 2.1.5
   - Accept related fields in $select (provided they are included either with $include or a query on that relation) ({$select: ['id', 'users.profile_id'})
 
