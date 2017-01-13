@@ -70,16 +70,16 @@ appendWhere = (query, condition, options={}) ->
 
         if condition.operator
           query.whereIn(from_key, () ->
-              this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, () ->
-                  this.select('id').from(to_table)[condition.method](condition.key, condition.operator, condition.value)
-                )
+            this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, () ->
+              this.select('id').from(to_table)[condition.method](condition.key, condition.operator, condition.value)
             )
+          )
         else
           query.whereIn(from_key, () ->
-              this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, () ->
-                  this.select('id').from(to_table)[condition.method](condition.key, condition.value)
-                )
+            this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, () ->
+              this.select('id').from(to_table)[condition.method](condition.key, condition.value)
             )
+          )
 
       else
         if condition.related.type is 'belongsTo'
@@ -92,13 +92,12 @@ appendWhere = (query, condition, options={}) ->
 
         if condition.operator
           query.whereIn(from_key, () ->
-              this.select(sub_query_select).from(relation_table)[condition.method](condition.key, condition.operator, condition.value)
-            )
+            this.select(sub_query_select).from(relation_table)[condition.method](condition.key, condition.operator, condition.value)
+          )
         else
           query.whereIn(from_key, () ->
-              this.select(sub_query_select).from(relation_table)[condition.method](condition.key, condition.value)
-            )
-
+            this.select(sub_query_select).from(relation_table)[condition.method](condition.key, condition.value)
+          )
 
     else
       if condition.operator
