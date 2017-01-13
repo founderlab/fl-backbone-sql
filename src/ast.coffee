@@ -62,8 +62,6 @@ module.exports = class SqlAst
           conditions.push(cond)
         else
           cond = @parseDotRelation(key, value)
-          # [cond, relation_key, relation] = @parseDotRelation(key, value)
-          # @join(relation_key, relation, {condition: true})
           conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
@@ -103,11 +101,10 @@ module.exports = class SqlAst
     while relation_keys.length
       current_relation_key = relation_keys.shift()
       current_relation = @getRelation(current_relation_key, current_model_type)
-      @join(current_relation_key, current_relation)
+      @join(current_relation_key, current_relation, {include: !!relation_keys.length})
       current_model_type = current_relation.reverse_model_type
-    cond = @parseCondition(relation_field, value, {related: current_relation, model_type: current_model_type, table: current_model_type.tableName()})
 
-    return cond
+    return @parseCondition(relation_field, value, {related: current_relation, model_type: current_model_type, table: current_model_type.tableName()})
 
   join: (relation_key, relation, options={}) ->
     @prefix_columns = true
@@ -286,7 +283,7 @@ module.exports = class SqlAst
     console.log('----  AST  ----')
     console.log('> select:', @select)
     console.log('> where:')
-    console.dir(@where, {depth: null, colors: true})
+    @printCondition(@where)
     console.log('> joins:', ([key, join.columns] for key, join of @joins))
     console.log('> count:', @count)
     console.log('> exists:', @exists)
@@ -294,3 +291,16 @@ module.exports = class SqlAst
     console.log('> limit:', @limit)
 
     console.log('---------------------------------------------------------')
+
+  printCondition: (cond, indent='') ->
+    process.stdout.write(indent)
+    to_print = _.omit(cond, 'related', 'conditions')
+    related_name = cond.related?.reverse_relation?.model_type?.model_name
+    if related_name
+      to_print.relation = related_name
+    console.dir(to_print, {depth: null, colors: true})
+    # indent += ' '
+    if cond.conditions?.length
+      console.log(indent + '[')
+      @printCondition(c, indent + '  ') for c in cond.conditions
+      console.log(indent + ']')
