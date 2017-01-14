@@ -101,7 +101,9 @@ module.exports = class SqlAst
     while relation_keys.length
       current_relation_key = relation_keys.shift()
       current_relation = @getRelation(current_relation_key, current_model_type)
-      @join(current_relation_key, current_relation, {include: !!relation_keys.length})
+      options = {}
+      options.include = true if relation_keys.length
+      @join(current_relation_key, current_relation, options)
       current_model_type = current_relation.reverse_model_type
 
     return @parseCondition(relation_field, value, {related: current_relation, model_type: current_model_type, table: current_model_type.tableName()})
@@ -284,7 +286,7 @@ module.exports = class SqlAst
     console.log('> select:', @select)
     console.log('> where:')
     @printCondition(@where)
-    console.log('> joins:', ([key, join.columns] for key, join of @joins))
+    console.log('> joins:', ([key, "include: #{join.include}", join.columns] for key, join of @joins))
     console.log('> count:', @count)
     console.log('> exists:', @exists)
     console.log('> sort:', @sort)

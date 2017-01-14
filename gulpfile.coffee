@@ -25,7 +25,7 @@ testFn = (options={}) -> (callback) ->
   gutil.log "Running tests for #{options.protocol} #{tags}"
 
   gulp.src([
-      # "node_modules/backbone-orm/test/spec/sync/relational/to_json.tests.coffee"
+      # "node_modules/backbone-orm/test/spec/sync/relational/has_many.tests.coffee"
       "node_modules/backbone-orm/test/{issues,spec/sync}/**/*.tests.coffee"
       # "#{if tags.indexOf('@quick') >= 0 then '' else '{node_modules/backbone-rest/,}'}test/spec/**/*.tests.coffee"
     ])
