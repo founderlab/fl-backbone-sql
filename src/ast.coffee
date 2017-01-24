@@ -51,6 +51,7 @@ module.exports = class SqlAst
   # Internal parse method that recursively parses the query
   parseQuery: (query, options={}) ->
     table = options.table
+    options.method or= 'where'
     conditions = []
 
     for key, value of query when key[0] isnt '$'
@@ -61,7 +62,7 @@ module.exports = class SqlAst
         if cond = @parseJsonField(key, value)
           conditions.push(cond)
         else
-          cond = @parseDotRelation(key, value)
+          cond = @parseDotRelation(key, value, options)
           conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
@@ -80,26 +81,26 @@ module.exports = class SqlAst
       @abort = true unless query.$ids.length
 
     if query?.$or
-      or_where = {method: 'where', conditions: []}
+      or_where = {method: options.method, conditions: []}
       for q in query.$or
         or_where.conditions = or_where.conditions.concat(@parseQuery(q, {table, method: 'orWhere'}))
       conditions.push(or_where)
 
     if query?.$and
-      and_where = {method: 'where', conditions: []}
+      and_where = {method: options.method, conditions: []}
       for q in query.$and
         and_where.conditions = and_where.conditions.concat(@parseQuery(q, {table}))
       conditions.push(and_where)
 
     return conditions
 
+<<<<<<< HEAD
 
 
 
 
 
-
-  parseDotRelation: (key, value) ->
+  parseDotRelation: (key, value, options) ->
     relation_keys = key.split('.')
     relation_field = relation_keys.pop()
 
@@ -125,7 +126,44 @@ module.exports = class SqlAst
       else
         root_cond = current_cond = next_cond
 
-    return @parseCondition(relation_field, value, {model_type: last_model_type, related: current_relation, table: current_model_type.tableName()})
+    # return @parseCondition(relation_field, value, {model_type: last_model_type, related: current_relation, table: current_model_type.tableName()})
+
+#'reverses.finals.id': final.id,
+
+###
+  key = 'reverses.finals.id'
+  value = 1
+
+  where {
+    method: 'where'
+    model_type: Reverse
+    relation: getRelation(Owner, reverses)
+    from_field: reverses
+    to_field: finals
+    value: null
+    # query:
+
+      where id in
+        (select reverses.owner_id from reverses where reverses.id in
+          (select finals.reverse_id from finals where where finals.id = `id`)
+        )
+
+    dot_where {
+      model_type: Final
+      relation: getRelation(Reverse, finals)
+      from_field: finals
+      to_field: id
+
+    }
+  }
+###
+    return @parseCondition(relation_field, value, {
+      relation: current_relation,
+      model_type: current_model_type,
+      # related_model_type: current_model_type,
+      table: current_model_type.tableName(),
+      method: options.method,
+    })
 
   printCondition: (cond, indent='') ->
     process.stdout.write(indent)
@@ -144,10 +182,6 @@ module.exports = class SqlAst
       console.log(indent + '[')
       @printCondition(c, indent + '  ') for c in cond.conditions
       console.log(indent + ']')
-
-
-
-
 
   join: (relation_key, relation, options={}) ->
     @prefix_columns = true
