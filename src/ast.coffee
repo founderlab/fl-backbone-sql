@@ -50,7 +50,9 @@ module.exports = class SqlAst
 
   # Internal parse method that recursively parses the query
   parseQuery: (query, options={}) ->
+    console.log('>parseQuery', query, options)
     table = options.table
+    options.method or= 'where'
     conditions = []
 
     for key, value of query when key[0] isnt '$'
@@ -61,7 +63,8 @@ module.exports = class SqlAst
         if cond = @parseJsonField(key, value)
           conditions.push(cond)
         else
-          cond = @parseDotRelation(key, value)
+          console.log('calling parseDotRelation', key, value, options)
+          cond = @parseDotRelation(key, value, options)
           conditions.push(cond)
 
       # Many to Many relationships may be queried on the foreign key of the join table
@@ -80,20 +83,24 @@ module.exports = class SqlAst
       @abort = true unless query.$ids.length
 
     if query?.$or
-      or_where = {method: 'where', conditions: []}
+      or_where = {method: options.method, conditions: []}
       for q in query.$or
+        console.log('goign to add orwhere')
         or_where.conditions = or_where.conditions.concat(@parseQuery(q, {table, method: 'orWhere'}))
+      console.log('or_where')
+      @printCondition(or_where)
       conditions.push(or_where)
 
     if query?.$and
-      and_where = {method: 'where', conditions: []}
+      and_where = {method: options.method, conditions: []}
       for q in query.$and
         and_where.conditions = and_where.conditions.concat(@parseQuery(q, {table}))
       conditions.push(and_where)
 
     return conditions
 
-  parseDotRelation: (key, value) ->
+  parseDotRelation: (key, value, options) ->
+    console.log('parseDotRelation options', key, value, options)
     relation_keys = key.split('.')
     relation_field = relation_keys.pop()
 
@@ -106,7 +113,12 @@ module.exports = class SqlAst
       @join(current_relation_key, current_relation, options)
       current_model_type = current_relation.reverse_model_type
 
-    return @parseCondition(relation_field, value, {related: current_relation, model_type: current_model_type, table: current_model_type.tableName()})
+    return @parseCondition(relation_field, value, {
+      related: current_relation,
+      model_type: current_model_type,
+      table: current_model_type.tableName(),
+      method: options.method,
+    })
 
   join: (relation_key, relation, options={}) ->
     @prefix_columns = true
@@ -303,6 +315,6 @@ module.exports = class SqlAst
     console.dir(to_print, {depth: null, colors: true})
     # indent += ' '
     if cond.conditions?.length
-      console.log(indent + '[')
+      console.log(indent + 'conditions [')
       @printCondition(c, indent + '  ') for c in cond.conditions
       console.log(indent + ']')
