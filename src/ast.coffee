@@ -93,20 +93,61 @@ module.exports = class SqlAst
 
     return conditions
 
+
+
+
+
+
+
   parseDotRelation: (key, value) ->
     relation_keys = key.split('.')
     relation_field = relation_keys.pop()
 
+    last_model_type = null
     current_model_type = @model_type
+    root_cond = null
+
     while relation_keys.length
       current_relation_key = relation_keys.shift()
       current_relation = @getRelation(current_relation_key, current_model_type)
-      options = {}
-      options.include = true if relation_keys.length
-      @join(current_relation_key, current_relation, options)
+      # options = {}
+      # options.nest = true if relation_keys.length
+      # @join(current_relation_key, current_relation, options)
+      last_model_type = current_model_type
       current_model_type = current_relation.reverse_model_type
 
-    return @parseCondition(relation_field, value, {related: current_relation, model_type: current_model_type, table: current_model_type.tableName()})
+      next_cond = @parseCondition(relation_field, value, {model_type: last_model_type, related: current_relation, table: current_model_type.tableName()})
+      next_cond.nest = true if relation_keys.length
+
+      if current_cond
+        current_cond.conditions = [next_cond]
+        current_cond = next_cond
+      else
+        root_cond = current_cond = next_cond
+
+    return @parseCondition(relation_field, value, {model_type: last_model_type, related: current_relation, table: current_model_type.tableName()})
+
+  printCondition: (cond, indent='') ->
+    process.stdout.write(indent)
+    to_print = _.omit(cond, 'related', 'model_type', 'conditions')
+    # console.dir(cond)
+
+    related_name = cond.related?.model_type?.model_name
+    model_name = cond.model_type?.model_name
+
+    to_print.related_name = related_name if related_name
+    to_print.model_name = model_name if model_name
+
+    console.dir(to_print, {depth: null, colors: true})
+    # indent += ' '
+    if cond.conditions?.length
+      console.log(indent + '[')
+      @printCondition(c, indent + '  ') for c in cond.conditions
+      console.log(indent + ']')
+
+
+
+
 
   join: (relation_key, relation, options={}) ->
     @prefix_columns = true
@@ -145,7 +186,7 @@ module.exports = class SqlAst
     method = options.method || 'where'
     key = @columnName(_key, options.table)
 
-    condition = {method, conditions: [], related: options.related}
+    condition = {method, conditions: [], related: options.related, model_type: options.model_type}
 
     if _.isObject(value) and not _.isDate(value)
 
@@ -293,16 +334,3 @@ module.exports = class SqlAst
     console.log('> limit:', @limit)
 
     console.log('---------------------------------------------------------')
-
-  printCondition: (cond, indent='') ->
-    process.stdout.write(indent)
-    to_print = _.omit(cond, 'related', 'conditions')
-    related_name = cond.related?.reverse_relation?.model_type?.model_name
-    if related_name
-      to_print.relation = related_name
-    console.dir(to_print, {depth: null, colors: true})
-    # indent += ' '
-    if cond.conditions?.length
-      console.log(indent + '[')
-      @printCondition(c, indent + '  ') for c in cond.conditions
-      console.log(indent + ']')

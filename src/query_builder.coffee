@@ -8,8 +8,8 @@ module.exports = buildQueryFromAst = (query, ast, options={}) ->
   for key, join of ast.joins
     join_options = {pivot_only: join.pivot_only and not (join.include or join.condition)}
     if join.include
-        joinToRelation(query, join.relation, join_options)
-        hasInclude = true
+      joinToRelation(query, join.relation, join_options)
+      hasInclude = true
 
   return query.count('*') if ast.count or options.count
   return query.count('*').limit(1) if ast.exists or options.exists
@@ -53,6 +53,9 @@ appendWhere = (query, condition, options={}) ->
   if !_.isUndefined(condition.key)
 
     if condition.related
+
+      if condition.nest
+        console.log('NEEDS NEST')
 
       relation_table = condition.key.split('.').shift()
       model_type = condition.related.model_type
