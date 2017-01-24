@@ -50,7 +50,6 @@ module.exports = class SqlAst
 
   # Internal parse method that recursively parses the query
   parseQuery: (query, options={}) ->
-    console.log('>parseQuery', query, options)
     table = options.table
     options.method or= 'where'
     conditions = []
@@ -63,7 +62,6 @@ module.exports = class SqlAst
         if cond = @parseJsonField(key, value)
           conditions.push(cond)
         else
-          console.log('calling parseDotRelation', key, value, options)
           cond = @parseDotRelation(key, value, options)
           conditions.push(cond)
 
@@ -85,10 +83,7 @@ module.exports = class SqlAst
     if query?.$or
       or_where = {method: options.method, conditions: []}
       for q in query.$or
-        console.log('goign to add orwhere')
         or_where.conditions = or_where.conditions.concat(@parseQuery(q, {table, method: 'orWhere'}))
-      console.log('or_where')
-      @printCondition(or_where)
       conditions.push(or_where)
 
     if query?.$and
@@ -100,7 +95,6 @@ module.exports = class SqlAst
     return conditions
 
   parseDotRelation: (key, value, options) ->
-    console.log('parseDotRelation options', key, value, options)
     relation_keys = key.split('.')
     relation_field = relation_keys.pop()
 
