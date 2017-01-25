@@ -10,7 +10,7 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
   DATABASE_URL = options.database_url or ''
   BASE_SCHEMA = options.schema or {}
   SYNC = options.sync
-  BASE_COUNT = 5
+  BASE_COUNT = 20
 
   PICK_KEYS = ['id', 'name']
 
@@ -73,7 +73,7 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
           name: Fabricator.uniqueId('reverse_')
           created_at: Fabricator.date
         }, (err, models) -> MODELS.more_reverse = models; callback(err)
-        create_queue.defer (callback) -> Fabricator.create Final, BASE_COUNT, {
+        create_queue.defer (callback) -> Fabricator.create Final, 2*BASE_COUNT, {
           name: Fabricator.uniqueId('final_')
           created_at: Fabricator.date
         }, (err, models) -> MODELS.final = models; callback(err)
@@ -97,13 +97,15 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
               reverses: [MODELS.reverse.pop(), MODELS.reverse.pop()]
               more_reverses: [MODELS.more_reverse.pop(), MODELS.more_reverse.pop()]
             secondary_values:
-              finals: [MODELS.final.pop()]
+              finals: [MODELS.final.pop(), MODELS.final.pop()]
           link_tasks.push(link_task)
 
         for link_task in link_tasks then do (link_task) -> save_queue.defer (callback) ->
-          reverse = link_task.values.reverses[0]
-          reverse.set(link_task.secondary_values)
-          reverse.save ->
+          q = new Queue()
+          _.forEach link_task.values.reverses, (reverse) -> q.defer (callback) ->
+            reverse.set(link_task.secondary_values)
+            reverse.save callback
+          q.await ->
             link_task.owner.set(link_task.values)
             link_task.owner.save callback
 
@@ -111,7 +113,7 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
 
       queue.await callback
 
-    # it 'Can query simple relationships', (done) ->
+    # it 'Can query simple relationships (hasMany)', (done) ->
     #   Final.findOne (err, final) ->
     #     assert.ok(!err, "No errors: #{err}")
     #     query = {
@@ -122,42 +124,97 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
     #     Reverse.cursor(query).toJSON (err, reverse) ->
     #       assert.ok(!err, "No errors: #{err}")
     #       assert.ok(reverse, 'found model')
-    #       console.dir(reverse)
     #       done()
 
-    it 'Can query extended relationships', (done) ->
+    # it 'Can query simple relationships (belongsTo)', (done) ->
+    #   Reverse.findOne (err, reverse) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     query = {
+    #       'reverse.name': reverse.get('name'),
+    #       $select: 'id',
+    #       $verbose: true,
+    #     }
+    #     Final.cursor(query).toJSON (err, reverse) ->
+    #       assert.ok(!err, "No errors: #{err}")
+    #       assert.ok(reverse, 'found model')
+    #       done()
+
+    # it 'Can query extended relationships', (done) ->
+    #   Final.findOne (err, final) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     query = {
+    #       'reverses.finals.id': final.id,
+    #       $verbose: true,
+    #     }
+    #     Owner.cursor(query).toJSON (err, owners) ->
+    #       assert.ok(!err, "No errors: #{err}")
+    #       assert.ok(owners.length, 'found models')
+
+    #       Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
+    #         assert.ok(!err, "No errors: #{err}")
+    #         assert.ok(reverses, 'found models')
+
+    #         _.forEach reverses, (reverse) ->
+    #           _.forEach owners, (owner) ->
+    #             assert.equal(reverse.owner_id, owner.id)
+
+    #         done()
+
+    # it 'Can query extended relationships', (done) ->
+    #   Final.findOne (err, final) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     query = {
+    #       'reverses.finals.id': final.id,
+    #       $verbose: true,
+    #       $include: 'reverses',
+    #     }
+    #     Owner.cursor(query).toJSON (err, owners) ->
+    #       assert.ok(!err, "No errors: #{err}")
+    #       assert.ok(owners.length, 'found models')
+
+    #       Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
+    #         assert.ok(!err, "No errors: #{err}")
+    #         assert.ok(reverses, 'found models')
+
+    #         _.forEach reverses, (reverse) ->
+    #           _.forEach owners, (owner) ->
+    #             assert.equal(reverse.owner_id, owner.id)
+
+    #         done()
+
+    # it 'Can query extended relationships with paging', (done) ->
+    #   Final.findOne (err, final) ->
+    #     assert.ok(!err, "No errors: #{err}")
+    #     query = {
+    #       'reverses.finals.id': final.id,
+    #       $verbose: true,
+    #       $page: true,
+    #     }
+    #     Owner.cursor(query).toJSON (err, paging_info) ->
+    #       assert.ok(!err, "No errors: #{err}")
+    #       assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
+    #       assert.equal(1, paging_info.total_rows, "Counted owners. Expected: 1. Actual: #{paging_info.total_rows}")
+    #       done()
+
+    it 'Can query extended relationships with limit', (done) ->
+      limit = 5
       Final.findOne (err, final) ->
         assert.ok(!err, "No errors: #{err}")
         query = {
           'reverses.finals.id': final.id,
-          $select: 'id',
           $verbose: true,
-          # $include: ['reverses'],
+          $limit: limit,
         }
-        Owner.cursor(query).toJSON (err, owner) ->
+        Owner.cursor(query).toJSON (err, owners) ->
           assert.ok(!err, "No errors: #{err}")
-          assert.ok(owner, 'found model')
-          console.dir(owner)
+          assert.equal(owners.length, 5, 'found models')
 
-          # assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
-          # assert.equal(2, paging_info.total_rows, "Counted reverses. Expected: 2. Actual: #{paging_info.total_rows}")
-          done()
+          Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
+            assert.ok(!err, "No errors: #{err}")
+            assert.ok(reverses, 'found models')
 
-    # it 'Can query extended relationships with paging', (done) ->
-    #   Owner.findOne (err, owner) ->
-    #     assert.ok(!err, "No errors: #{err}")
-    #     assert.ok(owner, 'found model')
+            _.forEach reverses, (reverse) ->
+              _.forEach owners, (owner) ->
+                assert.equal(reverse.owner_id, owner.id)
 
-    #     Reverse.cursor({owner_id: owner.id, $page: true}).toJSON (err, paging_info) ->
-    #       assert.ok(!err, "No errors: #{err}")
-    #       assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
-    #       assert.equal(2, paging_info.total_rows, "Counted reverses. Expected: 2. Actual: #{paging_info.total_rows}")
-    #       done()
-
-    # it 'Can include related models', (done) ->
-    #   Owner.cursor({$one: true}).include('flats').toJSON (err, test_model) ->
-    #     assert.ok(!err, "No errors: #{err}")
-    #     assert.ok(test_model, 'found model')
-    #     assert.ok(test_model.flats, 'Has related flats')
-    #     assert.equal(test_model.flats.length, 2, "Has the correct number of related flats \nExpected: #{2}\nActual: #{test_model.flats.length}")
-    #     done()
+            done()

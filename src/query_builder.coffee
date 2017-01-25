@@ -21,55 +21,89 @@ module.exports = buildQueryFromAst = (query, ast, options={}) ->
   return query
 
 # TODO: look at optimizing without left outer joins everywhere
-# Make another query to get the complete set of related objects when they have been fitered by a where clause
+# Make another query to get the complete set of relation objects when they have been fitered by a where clause
 joinToRelation = (query, relation, options={}) ->
   model_type = relation.model_type
-  related_model_type = relation.reverse_model_type
+  relation_model_type = relation.reverse_model_type
+
+  from_table = model_type.tableName()
+  to_table = relation_model_type.tableName()
 
   if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
     pivot_table = relation.join_table.tableName()
 
     # Join the from model to the pivot table
-    from_key = "#{model_type.tableName()}.id"
+    from_key = "#{from_table}.id"
     pivot_to_key = "#{pivot_table}.#{relation.foreign_key}"
     query.leftOuterJoin(pivot_table, from_key, '=', pivot_to_key)
 
     unless options.pivot_only
       # Then to the to model's table (only if we need data from them second table)
       pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
-      to_key = "#{related_model_type.tableName()}.id"
-      query.leftOuterJoin(related_model_type.tableName(), pivot_from_key, '=', to_key)
+      to_key = "#{to_table}.id"
+      query.leftOuterJoin(to_table, pivot_from_key, '=', to_key)
 
   else
     if relation.type is 'belongsTo'
-      from_key = "#{model_type.tableName()}.#{relation.foreign_key}"
-      to_key = "#{related_model_type.tableName()}.id"
+      from_key = "#{from_table}.#{relation.foreign_key}"
+      to_key = "#{to_table}.id"
     else
-      from_key = "#{model_type.tableName()}.id"
-      to_key = "#{related_model_type.tableName()}.#{relation.foreign_key}"
-    query.leftOuterJoin(related_model_type.tableName(), from_key, '=', to_key)
+      from_key = "#{from_table}.id"
+      to_key = "#{to_table}.#{relation.foreign_key}"
+    query.leftOuterJoin(to_table, from_key, '=', to_key)
+
+appendRelatedWhere = (query, condition, options={}) ->
+  from_model_type = condition.relation.model_type
+  table = condition.model_type.tableName()
+
+  if condition.relation.type is 'belongsTo'
+    from_key = "#{from_model_type.tableName()}.#{condition.relation.reverse_relation.foreign_key}"
+    select = "#{condition.relation.reverse_model_type.tableName()}.id"
+
+  else
+    from_key = "#{from_model_type.tableName()}.id"
+    select = condition.relation.reverse_relation.foreign_key
+
+  if condition.operator
+    query.whereIn(from_key, () ->
+      q = @
+      if condition.value
+        this.select(select).from(table)[condition.method](condition.key, condition.operator, condition.value)
+      else if condition.dot_where
+        this.select(select).from(table)
+        appendRelatedWhere(q, condition.dot_where, options)
+    )
+
+  else
+    query.whereIn(from_key, () ->
+      q = @
+      if condition.value
+        this.select(select).from(table)[condition.method](condition.key, condition.value)
+      else if condition.dot_where
+        this.select(select).from(table)
+        appendRelatedWhere(q, condition.dot_where, options)
+    )
 
 appendWhere = (query, condition, options={}) ->
-  if !_.isUndefined(condition.key)
+  if !_.isUndefined(condition.key) or condition.dot_where
 
-    if condition.related
+    if condition.relation
+      if condition.relation.type is 'hasMany' and condition.relation.reverse_relation.type is 'hasMany'
 
-      if condition.nest
-        console.log('NEEDS NEST')
+        relation_table = condition.key.split('.').shift()
+        from_model_type = condition.relation.model_type
+        relation_model_type = condition.relation.reverse_model_type
 
-      relation_table = condition.key.split('.').shift()
-      model_type = condition.related.model_type
-      related_model_type = condition.related.reverse_model_type
+        from_table = from_model_type.tableName()
+        to_table = relation_model_type.tableName()
+        pivot_table = condition.relation.join_table.tableName()
 
-      if condition.related.type is 'hasMany' and condition.related.reverse_relation.type is 'hasMany'
-        pivot_table = condition.related.join_table.tableName()
+        from_key = "#{from_table}.id"
+        pivot_to_key = "#{pivot_table}.#{condition.relation.foreign_key}"
 
-        from_key = "#{model_type.tableName()}.id"
-        pivot_to_key = "#{pivot_table}.#{condition.related.foreign_key}"
-
-        pivot_from_key = "#{pivot_table}.#{condition.related.reverse_relation.foreign_key}"
-        to_key = "#{related_model_type.tableName()}.id"
-        to_table= "#{related_model_type.tableName()}"
+        pivot_from_key = "#{pivot_table}.#{condition.relation.reverse_relation.foreign_key}"
+        to_key = "#{to_table}.id"
+        to_table= "#{to_table}"
 
         if condition.operator
           query.whereIn(from_key, () ->
@@ -85,22 +119,7 @@ appendWhere = (query, condition, options={}) ->
           )
 
       else
-        if condition.related.type is 'belongsTo'
-          from_key = "#{model_type.tableName()}.#{condition.related.reverse_relation.foreign_key}"
-          sub_query_select = "#{condition.related.reverse_model_type.tableName()}.id"
-
-        else
-          from_key = "#{model_type.tableName()}.id"
-          sub_query_select = condition.related.reverse_relation.foreign_key
-
-        if condition.operator
-          query.whereIn(from_key, () ->
-            this.select(sub_query_select).from(relation_table)[condition.method](condition.key, condition.operator, condition.value)
-          )
-        else
-          query.whereIn(from_key, () ->
-            this.select(sub_query_select).from(relation_table)[condition.method](condition.key, condition.value)
-          )
+        appendRelatedWhere(query, condition, options)
 
     else
       if condition.operator
@@ -112,7 +131,7 @@ appendWhere = (query, condition, options={}) ->
     query[condition.method] ->
       sub_query = @
       for c in condition.conditions
-        appendWhere(sub_query, c, model_type)
+        appendWhere(sub_query, c)
 
   return query
 

@@ -57,7 +57,7 @@ module.exports = class SqlAst
     for key, value of query when key[0] isnt '$'
       throw new Error "Unexpected undefined for query key '#{key}'" if _.isUndefined(value)
 
-      # A dot indicates a condition on a related model
+      # A dot indicates a condition on a relation model
       if key.indexOf('.') > 0
         if cond = @parseJsonField(key, value)
           conditions.push(cond)
@@ -94,94 +94,44 @@ module.exports = class SqlAst
 
     return conditions
 
-<<<<<<< HEAD
+  # Take a list of relation keys and create conditions for them
+  # The final key is the field of the final model to query on
+  #
+  # keys may be of the form `reverse.final.name`
+  # where `reverse` and `final` are relations
+  # and `name` is the field to query on from the `final` relation
+  #
+  # recursively nest conditions via the `dot_where` property on the conditions
+  relatedCondition: (keys, value, previous_model_type, options) ->
+    relation_key = keys.shift()
+    relation = @getRelation(relation_key, previous_model_type)
+    model_type = relation.reverse_model_type
 
+    # Has further relations to process
+    if keys.length > 1
+      condition = {
+        relation
+        model_type
+        key: relation_key
+        method: 'whereIn'
+        dot_where: @relatedCondition(keys, value, model_type, options)
+      }
 
+    # No further relations to process -  the remaining key is the field to query against
+    else
+      key = keys.pop()
+      options = _.extend(options, {
+        relation
+        model_type
+        table: model_type.tableName()
+        method: options.method
+      })
+      condition = @parseCondition(key, value, options)
 
-
+    return condition
 
   parseDotRelation: (key, value, options) ->
-    relation_keys = key.split('.')
-    relation_field = relation_keys.pop()
-
-    last_model_type = null
-    current_model_type = @model_type
-    root_cond = null
-
-    while relation_keys.length
-      current_relation_key = relation_keys.shift()
-      current_relation = @getRelation(current_relation_key, current_model_type)
-      # options = {}
-      # options.nest = true if relation_keys.length
-      # @join(current_relation_key, current_relation, options)
-      last_model_type = current_model_type
-      current_model_type = current_relation.reverse_model_type
-
-      next_cond = @parseCondition(relation_field, value, {model_type: last_model_type, related: current_relation, table: current_model_type.tableName()})
-      next_cond.nest = true if relation_keys.length
-
-      if current_cond
-        current_cond.conditions = [next_cond]
-        current_cond = next_cond
-      else
-        root_cond = current_cond = next_cond
-
-    # return @parseCondition(relation_field, value, {model_type: last_model_type, related: current_relation, table: current_model_type.tableName()})
-
-#'reverses.finals.id': final.id,
-
-###
-  key = 'reverses.finals.id'
-  value = 1
-
-  where {
-    method: 'where'
-    model_type: Reverse
-    relation: getRelation(Owner, reverses)
-    from_field: reverses
-    to_field: finals
-    value: null
-    # query:
-
-      where id in
-        (select reverses.owner_id from reverses where reverses.id in
-          (select finals.reverse_id from finals where where finals.id = `id`)
-        )
-
-    dot_where {
-      model_type: Final
-      relation: getRelation(Reverse, finals)
-      from_field: finals
-      to_field: id
-
-    }
-  }
-###
-    return @parseCondition(relation_field, value, {
-      relation: current_relation,
-      model_type: current_model_type,
-      # related_model_type: current_model_type,
-      table: current_model_type.tableName(),
-      method: options.method,
-    })
-
-  printCondition: (cond, indent='') ->
-    process.stdout.write(indent)
-    to_print = _.omit(cond, 'related', 'model_type', 'conditions')
-    # console.dir(cond)
-
-    related_name = cond.related?.model_type?.model_name
-    model_name = cond.model_type?.model_name
-
-    to_print.related_name = related_name if related_name
-    to_print.model_name = model_name if model_name
-
-    console.dir(to_print, {depth: null, colors: true})
-    # indent += ' '
-    if cond.conditions?.length
-      console.log(indent + '[')
-      @printCondition(c, indent + '  ') for c in cond.conditions
-      console.log(indent + ']')
+    return @relatedCondition(key.split('.'), value, @model_type, options)
 
   join: (relation_key, relation, options={}) ->
     @prefix_columns = true
@@ -213,14 +163,14 @@ module.exports = class SqlAst
   parseManyToManyRelation: (key, value, reverse_relation) ->
     relation = reverse_relation.reverse_relation
     relation_key = relation.key
-    cond = @parseCondition(reverse_relation.foreign_key, value, {related: relation, model_type: relation.model_type, table: relation.join_table.tableName()})
+    cond = @parseCondition(reverse_relation.foreign_key, value, {relation, model_type: relation.model_type, table: relation.join_table.tableName()})
     return [cond, relation_key, relation]
 
   parseCondition: (_key, value, options={}) ->
     method = options.method || 'where'
     key = @columnName(_key, options.table)
 
-    condition = {method, conditions: [], related: options.related, model_type: options.model_type}
+    condition = {method, conditions: [], relation: options.relation, model_type: options.model_type}
 
     if _.isObject(value) and not _.isDate(value)
 
@@ -228,7 +178,7 @@ module.exports = class SqlAst
         unless value.$in.length
           @abort = true
           return condition
-        if @isJsonField(_key) or options.related and @isJsonField(_key, options.model_type)
+        if @isJsonField(_key) or options.relation and @isJsonField(_key, options.model_type)
           for val in value.$in
             condition.conditions.push({
               method: 'orWhere'
@@ -240,18 +190,18 @@ module.exports = class SqlAst
             })
           return condition
         else
-          condition.conditions.push({key, method: 'whereIn', value: value.$in, related: options.related})
+          condition.conditions.push({key, method: 'whereIn', value: value.$in, relation: options.relation})
 
       if value?.$nin
-        condition.conditions.push({key, method: 'whereNotIn', value: value.$nin, related: options.related})
+        condition.conditions.push({key, method: 'whereNotIn', value: value.$nin, relation: options.relation})
 
       if value?.$exists?
-        condition.conditions.push({key, method: (if value?.$exists then 'whereNotNull' else 'whereNull'), related: options.related})
+        condition.conditions.push({key, method: (if value?.$exists then 'whereNotNull' else 'whereNull'), relation: options.relation})
 
       # Transform a conditional of type {key: {$like: 'string'}} to ('key', 'like', '%string%')
       if _.isObject(value) and value.$like
         val = if '%' in value.$like then value.$like else "%#{value.$like}%"
-        condition.conditions.push({key, method, operator: 'ilike', value: val, related: options.related})
+        condition.conditions.push({key, method, operator: 'ilike', value: val, relation: options.relation})
 
       # Transform a conditional of type {key: {$lt: 5, $gt: 3}} to [('key', '<', 5), ('key', '>', 3)]
       if _.size(mongo_conditions = _.pick(value, COMPARATOR_KEYS))
@@ -260,24 +210,24 @@ module.exports = class SqlAst
 
           if mongo_op is '$ne'
             if _.isNull(val)
-              condition.conditions.push({key, method: "#{method}NotNull"}, related: options.related)
+              condition.conditions.push({key, method: "#{method}NotNull"}, relation: options.relation)
             else
               condition.conditions.push({method, conditions: [
-                {key, operator, method: 'orWhere', value: val, related: options.related}
-                {key, method: 'orWhereNull', related: options.related}
+                {key, operator, method: 'orWhere', value: val, relation: options.relation}
+                {key, method: 'orWhereNull', relation: options.relation}
               ]})
 
           else if _.isNull(val)
             if mongo_op is '$eq'
-              condition.conditions.push({key, method: "#{method}Null", related: options.related})
+              condition.conditions.push({key, method: "#{method}Null", relation: options.relation})
             else
               throw new Error "Unexpected null with query key '#{key}': '#{mongo_conditions}'"
 
           else
-            condition.conditions.push({key, operator, method, value: val, related: options.related})
+            condition.conditions.push({key, operator, method, value: val, relation: options.relation})
 
     else
-      if @isJsonField(_key) or options.related and @isJsonField(_key, options.model_type)
+      if @isJsonField(_key) or options.relation and @isJsonField(_key, options.model_type)
         _.extend(condition, {
           key: '?? \\? ?'
           value: [key, value]
@@ -368,3 +318,22 @@ module.exports = class SqlAst
     console.log('> limit:', @limit)
 
     console.log('---------------------------------------------------------')
+
+  printCondition: (cond, indent='') ->
+    process.stdout.write(indent)
+    to_print = _.omit(cond, 'relation', 'model_type', 'previous_model_type', 'conditions', 'dot_where')
+    # console.dir(cond)
+
+    model_name = cond.model_type?.model_name
+    to_print.model_name = model_name if model_name
+
+    previous_model_name = cond.relation?.model_type?.model_name
+    to_print.previous_model_name = previous_model_name if previous_model_name
+
+    console.dir(to_print, {depth: null, colors: true})
+    if cond.conditions?.length
+      console.log(indent + '[')
+      @printCondition(c, indent + '  ') for c in cond.conditions
+      console.log(indent + ']')
+    if cond.dot_where
+      @printCondition(cond.dot_where, indent + '  ')
