@@ -3,7 +3,7 @@ assert = assert or require?('chai').assert
 BackboneORM = window?.BackboneORM; try BackboneORM or= require?('backbone-orm') catch; try BackboneORM or= require?('../../../../backbone-orm')
 {_, Backbone, Queue, Utils, JSONUtils, Fabricator} = BackboneORM
 
-_.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
+_.each BackboneORM.TestUtils.optionSets(), exports = (options) ->
   options = _.extend({}, options, __test__parameters) if __test__parameters?
   return if options.embed and not options.sync.capabilities(options.database_url or '').embed
 
@@ -113,88 +113,88 @@ _.each BackboneORM.TestUtils.optionSets()[0..0], exports = (options) ->
 
       queue.await callback
 
-    # it 'Can query simple relationships (hasMany)', (done) ->
-    #   Final.findOne (err, final) ->
-    #     assert.ok(!err, "No errors: #{err}")
-    #     query = {
-    #       'finals.id': final.id,
-    #       $select: 'id',
-    #       $verbose: true,
-    #     }
-    #     Reverse.cursor(query).toJSON (err, reverse) ->
-    #       assert.ok(!err, "No errors: #{err}")
-    #       assert.ok(reverse, 'found model')
-    #       done()
+    it 'Can query simple relationships (hasMany)', (done) ->
+      Final.findOne (err, final) ->
+        assert.ok(!err, "No errors: #{err}")
+        query = {
+          'finals.id': final.id,
+          $select: 'id',
+          $verbose: true,
+        }
+        Reverse.cursor(query).toJSON (err, reverse) ->
+          assert.ok(!err, "No errors: #{err}")
+          assert.ok(reverse, 'found model')
+          done()
 
-    # it 'Can query simple relationships (belongsTo)', (done) ->
-    #   Reverse.findOne (err, reverse) ->
-    #     assert.ok(!err, "No errors: #{err}")
-    #     query = {
-    #       'reverse.name': reverse.get('name'),
-    #       $select: 'id',
-    #       $verbose: true,
-    #     }
-    #     Final.cursor(query).toJSON (err, reverse) ->
-    #       assert.ok(!err, "No errors: #{err}")
-    #       assert.ok(reverse, 'found model')
-    #       done()
+    it 'Can query simple relationships (belongsTo)', (done) ->
+      Reverse.findOne (err, reverse) ->
+        assert.ok(!err, "No errors: #{err}")
+        query = {
+          'reverse.name': reverse.get('name'),
+          $select: 'id',
+          $verbose: true,
+        }
+        Final.cursor(query).toJSON (err, reverse) ->
+          assert.ok(!err, "No errors: #{err}")
+          assert.ok(reverse, 'found model')
+          done()
 
-    # it 'Can query extended relationships', (done) ->
-    #   Final.findOne (err, final) ->
-    #     assert.ok(!err, "No errors: #{err}")
-    #     query = {
-    #       'reverses.finals.id': final.id,
-    #       $verbose: true,
-    #     }
-    #     Owner.cursor(query).toJSON (err, owners) ->
-    #       assert.ok(!err, "No errors: #{err}")
-    #       assert.ok(owners.length, 'found models')
+    it 'Can query extended relationships', (done) ->
+      Final.findOne (err, final) ->
+        assert.ok(!err, "No errors: #{err}")
+        query = {
+          'reverses.finals.id': final.id,
+          $verbose: true,
+        }
+        Owner.cursor(query).toJSON (err, owners) ->
+          assert.ok(!err, "No errors: #{err}")
+          assert.ok(owners.length, 'found models')
 
-    #       Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
-    #         assert.ok(!err, "No errors: #{err}")
-    #         assert.ok(reverses, 'found models')
+          Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
+            assert.ok(!err, "No errors: #{err}")
+            assert.ok(reverses, 'found models')
 
-    #         _.forEach reverses, (reverse) ->
-    #           _.forEach owners, (owner) ->
-    #             assert.equal(reverse.owner_id, owner.id)
+            _.forEach reverses, (reverse) ->
+              _.forEach owners, (owner) ->
+                assert.equal(reverse.owner_id, owner.id)
 
-    #         done()
+            done()
 
-    # it 'Can query extended relationships', (done) ->
-    #   Final.findOne (err, final) ->
-    #     assert.ok(!err, "No errors: #{err}")
-    #     query = {
-    #       'reverses.finals.id': final.id,
-    #       $verbose: true,
-    #       $include: 'reverses',
-    #     }
-    #     Owner.cursor(query).toJSON (err, owners) ->
-    #       assert.ok(!err, "No errors: #{err}")
-    #       assert.ok(owners.length, 'found models')
+    it 'Can query extended relationships', (done) ->
+      Final.findOne (err, final) ->
+        assert.ok(!err, "No errors: #{err}")
+        query = {
+          'reverses.finals.id': final.id,
+          $verbose: true,
+          $include: 'reverses',
+        }
+        Owner.cursor(query).toJSON (err, owners) ->
+          assert.ok(!err, "No errors: #{err}")
+          assert.ok(owners.length, 'found models')
 
-    #       Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
-    #         assert.ok(!err, "No errors: #{err}")
-    #         assert.ok(reverses, 'found models')
+          Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
+            assert.ok(!err, "No errors: #{err}")
+            assert.ok(reverses, 'found models')
 
-    #         _.forEach reverses, (reverse) ->
-    #           _.forEach owners, (owner) ->
-    #             assert.equal(reverse.owner_id, owner.id)
+            _.forEach reverses, (reverse) ->
+              _.forEach owners, (owner) ->
+                assert.equal(reverse.owner_id, owner.id)
 
-    #         done()
+            done()
 
-    # it 'Can query extended relationships with paging', (done) ->
-    #   Final.findOne (err, final) ->
-    #     assert.ok(!err, "No errors: #{err}")
-    #     query = {
-    #       'reverses.finals.id': final.id,
-    #       $verbose: true,
-    #       $page: true,
-    #     }
-    #     Owner.cursor(query).toJSON (err, paging_info) ->
-    #       assert.ok(!err, "No errors: #{err}")
-    #       assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
-    #       assert.equal(1, paging_info.total_rows, "Counted owners. Expected: 1. Actual: #{paging_info.total_rows}")
-    #       done()
+    it 'Can query extended relationships with paging', (done) ->
+      Final.findOne (err, final) ->
+        assert.ok(!err, "No errors: #{err}")
+        query = {
+          'reverses.finals.id': final.id,
+          $verbose: true,
+          $page: true,
+        }
+        Owner.cursor(query).toJSON (err, paging_info) ->
+          assert.ok(!err, "No errors: #{err}")
+          assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
+          assert.equal(1, paging_info.total_rows, "Counted owners. Expected: 1. Actual: #{paging_info.total_rows}")
+          done()
 
     it 'Can query extended relationships with limit', (done) ->
       limit = 5
