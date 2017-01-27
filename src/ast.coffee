@@ -186,22 +186,24 @@ module.exports = class SqlAst
                 key: '?? \\? ?'
                 value: [key, val]
                 method: 'whereRaw'
+                relation: options.relation
+                model_type: options.model_type
               }]
             })
           return condition
         else
-          condition.conditions.push({key, method: 'whereIn', value: value.$in, relation: options.relation})
+          condition.conditions.push({key, method: 'whereIn', value: value.$in, relation: options.relation, model_type: options.model_type})
 
       if value?.$nin
-        condition.conditions.push({key, method: 'whereNotIn', value: value.$nin, relation: options.relation})
+        condition.conditions.push({key, method: 'whereNotIn', value: value.$nin, relation: options.relation, model_type: options.model_type})
 
       if value?.$exists?
-        condition.conditions.push({key, method: (if value?.$exists then 'whereNotNull' else 'whereNull'), relation: options.relation})
+        condition.conditions.push({key, method: (if value?.$exists then 'whereNotNull' else 'whereNull'), relation: options.relation, model_type: options.model_type})
 
       # Transform a conditional of type {key: {$like: 'string'}} to ('key', 'like', '%string%')
       if _.isObject(value) and value.$like
         val = if '%' in value.$like then value.$like else "%#{value.$like}%"
-        condition.conditions.push({key, method, operator: 'ilike', value: val, relation: options.relation})
+        condition.conditions.push({key, method, operator: 'ilike', value: val, relation: options.relation, model_type: options.model_type})
 
       # Transform a conditional of type {key: {$lt: 5, $gt: 3}} to [('key', '<', 5), ('key', '>', 3)]
       if _.size(mongo_conditions = _.pick(value, COMPARATOR_KEYS))
@@ -210,7 +212,7 @@ module.exports = class SqlAst
 
           if mongo_op is '$ne'
             if _.isNull(val)
-              condition.conditions.push({key, method: "#{method}NotNull"}, relation: options.relation)
+              condition.conditions.push({key, method: "#{method}NotNull"}, relation: options.relation, model_type: options.model_type)
             else
               condition.conditions.push({method, conditions: [
                 {key, operator, method: 'orWhere', value: val, relation: options.relation}
@@ -219,12 +221,12 @@ module.exports = class SqlAst
 
           else if _.isNull(val)
             if mongo_op is '$eq'
-              condition.conditions.push({key, method: "#{method}Null", relation: options.relation})
+              condition.conditions.push({key, method: "#{method}Null", relation: options.relation, model_type: options.model_type})
             else
               throw new Error "Unexpected null with query key '#{key}': '#{mongo_conditions}'"
 
           else
-            condition.conditions.push({key, operator, method, value: val, relation: options.relation})
+            condition.conditions.push({key, operator, method, value: val, relation: options.relation, model_type: options.model_type})
 
     else
       if @isJsonField(_key) or options.relation and @isJsonField(_key, options.model_type)
