@@ -16,6 +16,8 @@ module.exports = class SqlBackboneAdapter
           json[key] = JSON.parse(json[key])
         catch err
           # console.log(err)
+      else if value.type?.toLowerCase() in ['float', 'decimal'] and json[key] and _.isString(json[key])
+        json[key] = +json[key]
 
     # Make join table ids strings
     for key, value of json when key.endsWith('_id') and value
