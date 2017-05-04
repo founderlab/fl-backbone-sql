@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.4.3
+  - Fixed a bug whcih caused queries of the form {$or: [{'jsonField.name': value}, ...]} to be created with 'and' instead of 'or'.
+
 ### 2.2.0
   - Queries on related models no longer require a full join, so $limit and $offset work (thanks @kenhg!)
 
