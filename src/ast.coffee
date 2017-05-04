@@ -59,7 +59,7 @@ module.exports = class SqlAst
 
       # A dot indicates a condition on a relation model
       if key.indexOf('.') > 0
-        if cond = @parseJsonField(key, value)
+        if cond = @parseJsonField(key, value, options)
           conditions.push(cond)
         else
           cond = @parseDotRelation(key, value, options)
@@ -85,6 +85,7 @@ module.exports = class SqlAst
       for q in query.$or
         or_where.conditions = or_where.conditions.concat(@parseQuery(q, {table, method: 'orWhere'}))
       conditions.push(or_where)
+      console.log('or_where', or_where)
 
     if query?.$and
       and_where = {method: options.method, conditions: []}
@@ -148,11 +149,11 @@ module.exports = class SqlAst
     field = model_type.schema().fields[json_field]
     return field and field.type.toLowerCase() in ['json', 'jsonb']
 
-  parseJsonField: (key, value) ->
+  parseJsonField: (key, value, options={}) ->
     [json_field, attr] = key.split('.')
     if @isJsonField(json_field)
       cond = {
-        method: 'whereRaw'
+        method: if options.method is 'orWhere' then 'orWhereRaw' else 'whereRaw'
         key: "#{json_field} @> ?"
         value: "[{\"#{attr}\": \"#{value}\"}]"
       }
