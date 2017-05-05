@@ -152,10 +152,11 @@ module.exports = class SqlAst
   parseJsonField: (key, value, options={}) ->
     [json_field, attr] = key.split('.')
     if @isJsonField(json_field)
+      value_string = JSON.stringify(value)
       cond = {
         method: if options.method is 'orWhere' then 'orWhereRaw' else 'whereRaw'
-        key: "#{json_field} @> ?"
-        value: "[{\"#{attr}\": \"#{value}\"}]"
+        key: "\"#{json_field}\" @> ?"
+        value: "[{\"#{attr}\": #{value_string}}]"
       }
       return cond
 
