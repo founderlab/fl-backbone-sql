@@ -85,7 +85,6 @@ module.exports = class SqlAst
       for q in query.$or
         or_where.conditions = or_where.conditions.concat(@parseQuery(q, {table, method: 'orWhere'}))
       conditions.push(or_where)
-      console.log('or_where', or_where)
 
     if query?.$and
       and_where = {method: options.method, conditions: []}
