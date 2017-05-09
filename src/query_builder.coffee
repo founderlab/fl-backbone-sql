@@ -64,8 +64,9 @@ appendRelatedWhere = (query, condition, options={}) ->
     from_key = "#{from_model_type.tableName()}.id"
     select = condition.relation.reverse_relation.foreign_key
 
+  in_method = if condition.method is 'orWhere' then 'orWhereIn' else 'whereIn'
   if condition.operator
-    query.whereIn(from_key, () ->
+    query[in_method](from_key, () ->
       q = @
       if condition.value
         this.select(select).from(table)[condition.method](condition.key, condition.operator, condition.value)
@@ -75,7 +76,7 @@ appendRelatedWhere = (query, condition, options={}) ->
     )
 
   else
-    query.whereIn(from_key, () ->
+    query[in_method](from_key, () ->
       q = @
       if condition.value
         this.select(select).from(table)[condition.method](condition.key, condition.value)
