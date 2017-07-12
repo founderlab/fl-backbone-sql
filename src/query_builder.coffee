@@ -15,7 +15,7 @@ module.exports = buildQueryFromAst = (query, ast, options={}) ->
   return query.count('*').limit(1) if ast.exists or options.exists
 
   appendLimits(query, ast.limit, ast.offset) unless hasInclude #does not apply limit and offset clauses for queries with $include
-  appendSelect(query, ast)
+  appendSelect(query, ast) unless options.skipSelect
   appendSort(query, ast)
 
   return query

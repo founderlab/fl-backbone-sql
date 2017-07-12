@@ -28,7 +28,7 @@ module.exports = class SqlCursor extends sync.Cursor
         prefix_columns: false,
       })
       query = @connection(@model_type.tableName())
-      query = buildQueryFromAst(query, ast)
+      query = buildQueryFromAst(query, ast, {skipSelect: true})
 
       if @_cursor.$count
         query.count().from(@connection.distinct(@_cursor.$unique).from(@model_type.tableName()).as('count_query'))
@@ -41,14 +41,19 @@ module.exports = class SqlCursor extends sync.Cursor
       # Other fields are required - uses partition, a postgres window function
       else
         rank_field = @_cursor.$unique[0]
-        raw_query = "#{ast.select.join(', ')}, rank() over (partition by #{rank_field}"
-        if sort = ast.sort.shift()
-          raw_query += " order by #{sort.column} #{sort.direction})"
-        for sort in ast.sort?
-          raw_query += " , #{sort.column} #{sort.direction})"
+        raw_query = "#{ast.select.map((s) => "\"#{s}\"").join(', ')}, rank() over (partition by \"#{rank_field}\""
+        if ast.sort?.length
+          if sort = ast.sort?.shift()
+            raw_query += " order by \"#{sort.column}\" #{sort.direction}"
+          for sort in ast.sort?
+            raw_query += " , \"#{sort.column}\" #{sort.direction}"
+        raw_query += ")"
         subquery = @connection.select(@connection.raw(raw_query))
         subquery.from(@model_type.tableName()).as('subquery')
+        console.log('subquery', subquery.toString())
+        console.log('ast.select', ast.select)
         query.select(ast.select).from(subquery).where('rank', 1)
+        console.log('query', query.toString())
 
       return @runQuery query, ast, callback
 
