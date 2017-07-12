@@ -1,7 +1,10 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 2.5.0
+  - Fixed a bug with $unique which caused incorrect sql.
+
 ### 2.4.3
-  - Fixed a bug whcih caused queries of the form {$or: [{'jsonField.name': value}, ...]} to be created with 'and' instead of 'or'.
+  - Fixed a bug which caused queries of the form {$or: [{'jsonField.name': value}, ...]} to be created with 'and' instead of 'or'.
 
 ### 2.2.0
   - Queries on related models no longer require a full join, so $limit and $offset work (thanks @kenhg!)
@@ -13,7 +16,7 @@ Please refer to the following release notes when upgrading your version of Backb
   - Add support for related json arrays ({'relation.jsonField': 'something'})
 
 ### 2.1.3
-  - Fix bug with $include
+  - Fixed a bug with $include
 
 ### 2.1.2
   - Use full table.column names for sort fields
