@@ -1,220 +1,291 @@
-assert = assert or require?('chai').assert
+/*
+ * decaffeinate suggestions:
+ * DS101: Remove unnecessary use of Array.from
+ * DS102: Remove unnecessary code created because of implicit returns
+ * DS206: Consider reworking classes to avoid initClass
+ * DS207: Consider shorter variations of null checks
+ * Full docs: https://github.com/decaffeinate/decaffeinate/blob/master/docs/suggestions.md
+ */
+let exports;
+var assert = assert || (typeof require === 'function' ? require('chai').assert : undefined);
 
-BackboneORM = window?.BackboneORM; try BackboneORM or= require?('backbone-orm') catch; try BackboneORM or= require?('../../../../backbone-orm')
-{_, Backbone, Queue, Utils, JSONUtils, Fabricator} = BackboneORM
+let BackboneORM = typeof window !== 'undefined' && window !== null ? window.BackboneORM : undefined; try { if (!BackboneORM) { BackboneORM = typeof require === 'function' ? require('backbone-orm') : undefined; } } catch (error) { } try { if (!BackboneORM) { BackboneORM = typeof require === 'function' ? require('../../../../backbone-orm') : undefined; } } catch (error1) {}
+const {_, Backbone, Queue, Utils, JSONUtils, Fabricator} = BackboneORM;
 
-_.each BackboneORM.TestUtils.optionSets(), exports = (options) ->
-  options = _.extend({}, options, __test__parameters) if __test__parameters?
-  return if options.embed and not options.sync.capabilities(options.database_url or '').embed
+_.each(BackboneORM.TestUtils.optionSets(), (exports = function(options) {
+  if (typeof __test__parameters !== 'undefined' && __test__parameters !== null) { options = _.extend({}, options, __test__parameters); }
+  if (options.embed && !options.sync.capabilities(options.database_url || '').embed) { return; }
 
-  DATABASE_URL = options.database_url or ''
-  BASE_SCHEMA = options.schema or {}
-  SYNC = options.sync
-  BASE_COUNT = 20
+  const DATABASE_URL = options.database_url || '';
+  const BASE_SCHEMA = options.schema || {};
+  const SYNC = options.sync;
+  const BASE_COUNT = 20;
 
-  PICK_KEYS = ['id', 'name']
+  const PICK_KEYS = ['id', 'name'];
 
-  describe "hasMany #{options.$parameter_tags or ''}#{options.$tags}", ->
-    Flat = Reverse = Final = Owner = null
-    before ->
-      BackboneORM.configure {model_cache: {enabled: !!options.cache, max: 100}}
+  return describe(`hasMany ${options.$parameter_tags || ''}${options.$tags}`, function() {
+    let Final, Owner, Reverse;
+    let Flat = (Reverse = (Final = (Owner = null)));
+    before(function() {
+      BackboneORM.configure({model_cache: {enabled: !!options.cache, max: 100}});
 
-      class Flat extends Backbone.Model
-        urlRoot: "#{DATABASE_URL}/flats"
-        schema: BASE_SCHEMA
-        sync: SYNC(Flat)
+      Flat = class Flat extends Backbone.Model {
+        static initClass() {
+          this.prototype.urlRoot = `${DATABASE_URL}/flats`;
+          this.prototype.schema = BASE_SCHEMA;
+          this.prototype.sync = SYNC(Flat);
+        }
+      };
+      Flat.initClass();
 
-      class Reverse extends Backbone.Model
-        urlRoot: "#{DATABASE_URL}/reverses"
-        schema: _.defaults({
-          owner: -> ['belongsTo', Owner]
-          another_owner: -> ['belongsTo', Owner, as: 'more_reverses']
-          finals: -> ['hasMany', Final]
-        }, BASE_SCHEMA)
-        sync: SYNC(Reverse)
+      Reverse = class Reverse extends Backbone.Model {
+        static initClass() {
+          this.prototype.urlRoot = `${DATABASE_URL}/reverses`;
+          this.prototype.schema = _.defaults({
+            owner() { return ['belongsTo', Owner]; },
+            another_owner() { return ['belongsTo', Owner, {as: 'more_reverses'}]; },
+            finals() { return ['hasMany', Final]; }
+          }, BASE_SCHEMA);
+          this.prototype.sync = SYNC(Reverse);
+        }
+      };
+      Reverse.initClass();
 
-      class Final extends Backbone.Model
-        urlRoot: "#{DATABASE_URL}/finals"
-        schema: _.defaults({
-          reverse: -> ['belongsTo', Reverse]
-        }, BASE_SCHEMA)
-        sync: SYNC(Final)
+      Final = class Final extends Backbone.Model {
+        static initClass() {
+          this.prototype.urlRoot = `${DATABASE_URL}/finals`;
+          this.prototype.schema = _.defaults({
+            reverse() { return ['belongsTo', Reverse]; }
+          }, BASE_SCHEMA);
+          this.prototype.sync = SYNC(Final);
+        }
+      };
+      Final.initClass();
 
-      class Owner extends Backbone.Model
-        urlRoot: "#{DATABASE_URL}/owners"
-        schema: _.defaults({
-          flats: -> ['hasMany', Flat]
-          reverses: -> ['hasMany', Reverse]
-          more_reverses: -> ['hasMany', Reverse, as: 'another_owner']
-        }, BASE_SCHEMA)
-        sync: SYNC(Owner)
+      return Owner = (function() {
+        Owner = class Owner extends Backbone.Model {
+          static initClass() {
+            this.prototype.urlRoot = `${DATABASE_URL}/owners`;
+            this.prototype.schema = _.defaults({
+              flats() { return ['hasMany', Flat]; },
+              reverses() { return ['hasMany', Reverse]; },
+              more_reverses() { return ['hasMany', Reverse, {as: 'another_owner'}]; }
+            }, BASE_SCHEMA);
+            this.prototype.sync = SYNC(Owner);
+          }
+        };
+        Owner.initClass();
+        return Owner;
+      })();
+    });
 
-    after (callback) -> Utils.resetSchemas [Flat, Reverse, Final, Owner], callback
+    after(callback => Utils.resetSchemas([Flat, Reverse, Final, Owner], callback));
 
-    beforeEach (callback) ->
-      relation = Owner.relation('reverses')
-      delete relation.virtual
-      MODELS = {}
+    beforeEach(function(callback) {
+      const relation = Owner.relation('reverses');
+      delete relation.virtual;
+      const MODELS = {};
 
-      queue = new Queue(1)
-      queue.defer (callback) -> Utils.resetSchemas [Flat, Reverse, Final, Owner], callback
-      queue.defer (callback) ->
-        create_queue = new Queue()
+      const queue = new Queue(1);
+      queue.defer(callback => Utils.resetSchemas([Flat, Reverse, Final, Owner], callback));
+      queue.defer(function(callback) {
+        const create_queue = new Queue();
 
-        create_queue.defer (callback) -> Fabricator.create Flat, 20*BASE_COUNT, {
-          name: Fabricator.uniqueId('flat_')
+        create_queue.defer(callback => Fabricator.create(Flat, 20*BASE_COUNT, {
+          name: Fabricator.uniqueId('flat_'),
           created_at: Fabricator.date
-        }, (err, models) -> MODELS.flat = models; callback(err)
-        create_queue.defer (callback) -> Fabricator.create Reverse, 2*BASE_COUNT, {
-          name: Fabricator.uniqueId('reverse_')
+        }, function(err, models) { MODELS.flat = models; return callback(err); })
+         );
+        create_queue.defer(callback => Fabricator.create(Reverse, 2*BASE_COUNT, {
+          name: Fabricator.uniqueId('reverse_'),
           created_at: Fabricator.date
-        }, (err, models) -> MODELS.reverse = models; callback(err)
-        create_queue.defer (callback) -> Fabricator.create Reverse, 2*BASE_COUNT, {
-          name: Fabricator.uniqueId('reverse_')
+        }, function(err, models) { MODELS.reverse = models; return callback(err); })
+         );
+        create_queue.defer(callback => Fabricator.create(Reverse, 2*BASE_COUNT, {
+          name: Fabricator.uniqueId('reverse_'),
           created_at: Fabricator.date
-        }, (err, models) -> MODELS.more_reverse = models; callback(err)
-        create_queue.defer (callback) -> Fabricator.create Final, 2*BASE_COUNT, {
-          name: Fabricator.uniqueId('final_')
+        }, function(err, models) { MODELS.more_reverse = models; return callback(err); })
+         );
+        create_queue.defer(callback => Fabricator.create(Final, 2*BASE_COUNT, {
+          name: Fabricator.uniqueId('final_'),
           created_at: Fabricator.date
-        }, (err, models) -> MODELS.final = models; callback(err)
-        create_queue.defer (callback) -> Fabricator.create Owner, BASE_COUNT, {
-          name: Fabricator.uniqueId('owner_')
+        }, function(err, models) { MODELS.final = models; return callback(err); })
+         );
+        create_queue.defer(callback => Fabricator.create(Owner, BASE_COUNT, {
+          name: Fabricator.uniqueId('owner_'),
           created_at: Fabricator.date
-        }, (err, models) -> MODELS.owner = models; callback(err)
+        }, function(err, models) { MODELS.owner = models; return callback(err); })
+         );
 
-        create_queue.await callback
+        return create_queue.await(callback);
+      });
 
-      # link and save all
-      queue.defer (callback) ->
-        save_queue = new Queue()
+      // link and save all
+      queue.defer(function(callback) {
+        let link_task;
+        const save_queue = new Queue();
 
-        link_tasks = []
-        for owner in MODELS.owner
-          link_task =
-            owner: owner
-            values:
-              flats: [MODELS.flat.pop(), MODELS.flat.pop()]
-              reverses: [MODELS.reverse.pop(), MODELS.reverse.pop()]
+        const link_tasks = [];
+        for (let owner of Array.from(MODELS.owner)) {
+          link_task = {
+            owner,
+            values: {
+              flats: [MODELS.flat.pop(), MODELS.flat.pop()],
+              reverses: [MODELS.reverse.pop(), MODELS.reverse.pop()],
               more_reverses: [MODELS.more_reverse.pop(), MODELS.more_reverse.pop()]
-            secondary_values:
+            },
+            secondary_values: {
               finals: [MODELS.final.pop(), MODELS.final.pop()]
-          link_tasks.push(link_task)
+            }
+          };
+          link_tasks.push(link_task);
+        }
 
-        for link_task in link_tasks then do (link_task) -> save_queue.defer (callback) ->
-          q = new Queue()
-          _.forEach link_task.values.reverses, (reverse) -> q.defer (callback) ->
-            reverse.set(link_task.secondary_values)
-            reverse.save callback
-          q.await ->
-            link_task.owner.set(link_task.values)
-            link_task.owner.save callback
+        for (link_task of Array.from(link_tasks)) { (link_task => save_queue.defer(function(callback) {
+          const q = new Queue();
+          _.forEach(link_task.values.reverses, reverse => q.defer(function(callback) {
+            reverse.set(link_task.secondary_values);
+            return reverse.save(callback);
+          })
+           );
+          return q.await(function() {
+            link_task.owner.set(link_task.values);
+            return link_task.owner.save(callback);
+          });
+        }) )(link_task); }
 
-        save_queue.await callback
+        return save_queue.await(callback);
+      });
 
-      queue.await callback
+      return queue.await(callback);
+    });
 
-    it 'Can query simple relationships (hasMany)', (done) ->
-      Final.findOne (err, final) ->
-        assert.ok(!err, "No errors: #{err}")
-        query = {
+    it('Can query simple relationships (hasMany)', done =>
+      Final.findOne(function(err, final) {
+        assert.ok(!err, `No errors: ${err}`);
+        const query = {
           'finals.id': final.id,
           $select: 'id',
           $verbose: true,
-        }
-        Reverse.cursor(query).toJSON (err, reverse) ->
-          assert.ok(!err, "No errors: #{err}")
-          assert.ok(reverse, 'found model')
-          done()
+        };
+        return Reverse.cursor(query).toJSON(function(err, reverse) {
+          assert.ok(!err, `No errors: ${err}`);
+          assert.ok(reverse, 'found model');
+          return done();
+        });
+      })
+    );
 
-    it 'Can query simple relationships (belongsTo)', (done) ->
-      Reverse.findOne (err, reverse) ->
-        assert.ok(!err, "No errors: #{err}")
-        query = {
+    it('Can query simple relationships (belongsTo)', done =>
+      Reverse.findOne(function(err, reverse) {
+        assert.ok(!err, `No errors: ${err}`);
+        const query = {
           'reverse.name': reverse.get('name'),
           $select: 'id',
           $verbose: true,
-        }
-        Final.cursor(query).toJSON (err, reverse) ->
-          assert.ok(!err, "No errors: #{err}")
-          assert.ok(reverse, 'found model')
-          done()
+        };
+        return Final.cursor(query).toJSON(function(err, reverse) {
+          assert.ok(!err, `No errors: ${err}`);
+          assert.ok(reverse, 'found model');
+          return done();
+        });
+      })
+    );
 
-    it 'Can query extended relationships', (done) ->
-      Final.findOne (err, final) ->
-        assert.ok(!err, "No errors: #{err}")
-        query = {
+    it('Can query extended relationships', done =>
+      Final.findOne(function(err, final) {
+        assert.ok(!err, `No errors: ${err}`);
+        const query = {
           'reverses.finals.id': final.id,
           $verbose: true,
-        }
-        Owner.cursor(query).toJSON (err, owners) ->
-          assert.ok(!err, "No errors: #{err}")
-          assert.ok(owners.length, 'found models')
+        };
+        return Owner.cursor(query).toJSON(function(err, owners) {
+          assert.ok(!err, `No errors: ${err}`);
+          assert.ok(owners.length, 'found models');
 
-          Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
-            assert.ok(!err, "No errors: #{err}")
-            assert.ok(reverses, 'found models')
+          return Reverse.cursor({'finals.id': final.id}).toJSON(function(err, reverses) {
+            assert.ok(!err, `No errors: ${err}`);
+            assert.ok(reverses, 'found models');
 
-            _.forEach reverses, (reverse) ->
-              _.forEach owners, (owner) ->
-                assert.equal(reverse.owner_id, owner.id)
+            _.forEach(reverses, reverse =>
+              _.forEach(owners, owner => assert.equal(reverse.owner_id, owner.id))
+            );
 
-            done()
+            return done();
+          });
+        });
+      })
+    );
 
-    it 'Can query extended relationships', (done) ->
-      Final.findOne (err, final) ->
-        assert.ok(!err, "No errors: #{err}")
-        query = {
+    it('Can query extended relationships', done =>
+      Final.findOne(function(err, final) {
+        assert.ok(!err, `No errors: ${err}`);
+        const query = {
           'reverses.finals.id': final.id,
           $verbose: true,
           $include: 'reverses',
-        }
-        Owner.cursor(query).toJSON (err, owners) ->
-          assert.ok(!err, "No errors: #{err}")
-          assert.ok(owners.length, 'found models')
+        };
+        return Owner.cursor(query).toJSON(function(err, owners) {
+          assert.ok(!err, `No errors: ${err}`);
+          assert.ok(owners.length, 'found models');
 
-          Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
-            assert.ok(!err, "No errors: #{err}")
-            assert.ok(reverses, 'found models')
+          return Reverse.cursor({'finals.id': final.id}).toJSON(function(err, reverses) {
+            assert.ok(!err, `No errors: ${err}`);
+            assert.ok(reverses, 'found models');
 
-            _.forEach reverses, (reverse) ->
-              _.forEach owners, (owner) ->
-                assert.equal(reverse.owner_id, owner.id)
+            _.forEach(reverses, reverse =>
+              _.forEach(owners, owner => assert.equal(reverse.owner_id, owner.id))
+            );
 
-            done()
+            return done();
+          });
+        });
+      })
+    );
 
-    it 'Can query extended relationships with paging', (done) ->
-      Final.findOne (err, final) ->
-        assert.ok(!err, "No errors: #{err}")
-        query = {
+    it('Can query extended relationships with paging', done =>
+      Final.findOne(function(err, final) {
+        assert.ok(!err, `No errors: ${err}`);
+        const query = {
           'reverses.finals.id': final.id,
           $verbose: true,
           $page: true,
-        }
-        Owner.cursor(query).toJSON (err, paging_info) ->
-          assert.ok(!err, "No errors: #{err}")
-          assert.equal(0, paging_info.offset, "Has offset. Expected: 0. Actual: #{paging_info.offset}")
-          assert.equal(1, paging_info.total_rows, "Counted owners. Expected: 1. Actual: #{paging_info.total_rows}")
-          done()
+        };
+        return Owner.cursor(query).toJSON(function(err, paging_info) {
+          assert.ok(!err, `No errors: ${err}`);
+          assert.equal(0, paging_info.offset, `Has offset. Expected: 0. Actual: ${paging_info.offset}`);
+          assert.equal(1, paging_info.total_rows, `Counted owners. Expected: 1. Actual: ${paging_info.total_rows}`);
+          return done();
+        });
+      })
+    );
 
-    it 'Can query extended relationships with limit', (done) ->
-      limit = 5
-      Final.findOne (err, final) ->
-        assert.ok(!err, "No errors: #{err}")
-        query = {
+    return it('Can query extended relationships with limit', function(done) {
+      const limit = 5;
+      return Final.findOne(function(err, final) {
+        assert.ok(!err, `No errors: ${err}`);
+        const query = {
           'reverses.finals.id': final.id,
           $verbose: true,
           $limit: limit,
-        }
-        Owner.cursor(query).toJSON (err, owners) ->
-          assert.ok(!err, "No errors: #{err}")
-          assert.equal(owners.length, 5, 'found models')
+        };
+        return Owner.cursor(query).toJSON(function(err, owners) {
+          assert.ok(!err, `No errors: ${err}`);
+          assert.equal(owners.length, 5, 'found models');
 
-          Reverse.cursor({'finals.id': final.id}).toJSON (err, reverses) ->
-            assert.ok(!err, "No errors: #{err}")
-            assert.ok(reverses, 'found models')
+          return Reverse.cursor({'finals.id': final.id}).toJSON(function(err, reverses) {
+            assert.ok(!err, `No errors: ${err}`);
+            assert.ok(reverses, 'found models');
 
-            _.forEach reverses, (reverse) ->
-              _.forEach owners, (owner) ->
-                assert.equal(reverse.owner_id, owner.id)
+            _.forEach(reverses, reverse =>
+              _.forEach(owners, owner => assert.equal(reverse.owner_id, owner.id))
+            );
 
-            done()
+            return done();
+          });
+        });
+      });
+    });
+  });
+})
+);

@@ -1,151 +1,188 @@
-_ = require 'lodash'
+/*
+ * decaffeinate suggestions:
+ * DS101: Remove unnecessary use of Array.from
+ * DS102: Remove unnecessary code created because of implicit returns
+ * DS207: Consider shorter variations of null checks
+ * Full docs: https://github.com/decaffeinate/decaffeinate/blob/master/docs/suggestions.md
+ */
+let buildQueryFromAst;
+const _ = require('lodash');
 
-module.exports = buildQueryFromAst = (query, ast, options={}) ->
-  appendWhere(query, ast.where)
+module.exports = (buildQueryFromAst = function(query, ast, options) {
+  if (options == null) { options = {}; }
+  appendWhere(query, ast.where);
 
-  hasInclude = false
+  let hasInclude = false;
 
-  for key, join of ast.joins
-    join_options = {pivot_only: join.pivot_only and not (join.include or join.condition)}
-    if join.include
-      joinToRelation(query, join.relation, join_options)
-      hasInclude = true
+  for (let key in ast.joins) {
+    const join = ast.joins[key];
+    const join_options = {pivot_only: join.pivot_only && !(join.include || join.condition)};
+    if (join.include) {
+      joinToRelation(query, join.relation, join_options);
+      hasInclude = true;
+    }
+  }
 
-  return query.count('*') if ast.count or options.count
-  return query.count('*').limit(1) if ast.exists or options.exists
+  if (ast.count || options.count) { return query.count('*'); }
+  if (ast.exists || options.exists) { return query.count('*').limit(1); }
 
-  appendLimits(query, ast.limit, ast.offset) unless hasInclude #does not apply limit and offset clauses for queries with $include
-  appendSelect(query, ast) unless options.skipSelect
-  appendSort(query, ast)
+  if (!hasInclude) { appendLimits(query, ast.limit, ast.offset); } //does not apply limit and offset clauses for queries with $include
+  if (!options.skipSelect) { appendSelect(query, ast); }
+  appendSort(query, ast);
 
-  return query
+  return query;
+});
 
-# TODO: look at optimizing without left outer joins everywhere
-# Make another query to get the complete set of relation objects when they have been fitered by a where clause
-joinToRelation = (query, relation, options={}) ->
-  model_type = relation.model_type
-  relation_model_type = relation.reverse_model_type
+// TODO: look at optimizing without left outer joins everywhere
+// Make another query to get the complete set of relation objects when they have been fitered by a where clause
+var joinToRelation = function(query, relation, options) {
+  let from_key, to_key;
+  if (options == null) { options = {}; }
+  const { model_type } = relation;
+  const relation_model_type = relation.reverse_model_type;
 
-  from_table = model_type.tableName()
-  to_table = relation_model_type.tableName()
+  const from_table = model_type.tableName();
+  const to_table = relation_model_type.tableName();
 
-  if relation.type is 'hasMany' and relation.reverse_relation.type is 'hasMany'
-    pivot_table = relation.join_table.tableName()
+  if ((relation.type === 'hasMany') && (relation.reverse_relation.type === 'hasMany')) {
+    const pivot_table = relation.join_table.tableName();
 
-    # Join the from model to the pivot table
-    from_key = "#{from_table}.id"
-    pivot_to_key = "#{pivot_table}.#{relation.foreign_key}"
-    query.leftOuterJoin(pivot_table, from_key, '=', pivot_to_key)
+    // Join the from model to the pivot table
+    from_key = `${from_table}.id`;
+    const pivot_to_key = `${pivot_table}.${relation.foreign_key}`;
+    query.leftOuterJoin(pivot_table, from_key, '=', pivot_to_key);
 
-    unless options.pivot_only
-      # Then to the to model's table (only if we need data from them second table)
-      pivot_from_key = "#{pivot_table}.#{relation.reverse_relation.foreign_key}"
-      to_key = "#{to_table}.id"
-      query.leftOuterJoin(to_table, pivot_from_key, '=', to_key)
+    if (!options.pivot_only) {
+      // Then to the to model's table (only if we need data from them second table)
+      const pivot_from_key = `${pivot_table}.${relation.reverse_relation.foreign_key}`;
+      to_key = `${to_table}.id`;
+      return query.leftOuterJoin(to_table, pivot_from_key, '=', to_key);
+    }
 
-  else
-    if relation.type is 'belongsTo'
-      from_key = "#{from_table}.#{relation.foreign_key}"
-      to_key = "#{to_table}.id"
-    else
-      from_key = "#{from_table}.id"
-      to_key = "#{to_table}.#{relation.foreign_key}"
-    query.leftOuterJoin(to_table, from_key, '=', to_key)
+  } else {
+    if (relation.type === 'belongsTo') {
+      from_key = `${from_table}.${relation.foreign_key}`;
+      to_key = `${to_table}.id`;
+    } else {
+      from_key = `${from_table}.id`;
+      to_key = `${to_table}.${relation.foreign_key}`;
+    }
+    return query.leftOuterJoin(to_table, from_key, '=', to_key);
+  }
+};
 
-appendRelatedWhere = (query, condition, options={}) ->
-  from_model_type = condition.relation.model_type
-  table = condition.model_type.tableName()
+var appendRelatedWhere = function(query, condition, options) {
+  let from_key, select;
+  if (options == null) { options = {}; }
+  const from_model_type = condition.relation.model_type;
+  const table = condition.model_type.tableName();
 
-  if condition.relation.type is 'belongsTo'
-    from_key = "#{from_model_type.tableName()}.#{condition.relation.reverse_relation.foreign_key}"
-    select = "#{condition.relation.reverse_model_type.tableName()}.id"
+  if (condition.relation.type === 'belongsTo') {
+    from_key = `${from_model_type.tableName()}.${condition.relation.reverse_relation.foreign_key}`;
+    select = `${condition.relation.reverse_model_type.tableName()}.id`;
 
-  else
-    from_key = "#{from_model_type.tableName()}.id"
-    select = condition.relation.reverse_relation.foreign_key
+  } else {
+    from_key = `${from_model_type.tableName()}.id`;
+    select = condition.relation.reverse_relation.foreign_key;
+  }
 
-  in_method = if condition.method is 'orWhere' then 'orWhereIn' else 'whereIn'
-  if condition.operator
-    query[in_method](from_key, () ->
-      q = @
-      if condition.value
-        this.select(select).from(table)[condition.method](condition.key, condition.operator, condition.value)
-      else if condition.dot_where
-        this.select(select).from(table)
-        appendRelatedWhere(q, condition.dot_where, options)
-    )
+  const in_method = condition.method === 'orWhere' ? 'orWhereIn' : 'whereIn';
+  if (condition.operator) {
+    return query[in_method](from_key, function() {
+      const q = this;
+      if (condition.value) {
+        return this.select(select).from(table)[condition.method](condition.key, condition.operator, condition.value);
+      } else if (condition.dot_where) {
+        this.select(select).from(table);
+        return appendRelatedWhere(q, condition.dot_where, options);
+      }
+    });
 
-  else
-    query[in_method](from_key, () ->
-      q = @
-      if condition.value
-        this.select(select).from(table)[condition.method](condition.key, condition.value)
-      else if condition.dot_where
-        this.select(select).from(table)
-        appendRelatedWhere(q, condition.dot_where, options)
-    )
+  } else {
+    return query[in_method](from_key, function() {
+      const q = this;
+      if (condition.value) {
+        return this.select(select).from(table)[condition.method](condition.key, condition.value);
+      } else if (condition.dot_where) {
+        this.select(select).from(table);
+        return appendRelatedWhere(q, condition.dot_where, options);
+      }
+    });
+  }
+};
 
-appendWhere = (query, condition, options={}) ->
-  if !_.isUndefined(condition.key) or condition.dot_where
+var appendWhere = function(query, condition, options) {
+  if (options == null) { options = {}; }
+  if (!_.isUndefined(condition.key) || condition.dot_where) {
 
-    if condition.relation
-      if condition.relation.type is 'hasMany' and condition.relation.reverse_relation.type is 'hasMany'
+    if (condition.relation) {
+      if ((condition.relation.type === 'hasMany') && (condition.relation.reverse_relation.type === 'hasMany')) {
 
-        relation_table = condition.key.split('.').shift()
-        from_model_type = condition.relation.model_type
-        relation_model_type = condition.relation.reverse_model_type
+        const relation_table = condition.key.split('.').shift();
+        const from_model_type = condition.relation.model_type;
+        const relation_model_type = condition.relation.reverse_model_type;
 
-        from_table = from_model_type.tableName()
-        to_table = relation_model_type.tableName()
-        pivot_table = condition.relation.join_table.tableName()
+        const from_table = from_model_type.tableName();
+        let to_table = relation_model_type.tableName();
+        const pivot_table = condition.relation.join_table.tableName();
 
-        from_key = "#{from_table}.id"
-        pivot_to_key = "#{pivot_table}.#{condition.relation.foreign_key}"
+        const from_key = `${from_table}.id`;
+        const pivot_to_key = `${pivot_table}.${condition.relation.foreign_key}`;
 
-        pivot_from_key = "#{pivot_table}.#{condition.relation.reverse_relation.foreign_key}"
-        to_key = "#{to_table}.id"
-        to_table= "#{to_table}"
+        const pivot_from_key = `${pivot_table}.${condition.relation.reverse_relation.foreign_key}`;
+        const to_key = `${to_table}.id`;
+        to_table= `${to_table}`;
 
-        if condition.operator
-          query.whereIn(from_key, () ->
-            this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, () ->
-              this.select('id').from(to_table)[condition.method](condition.key, condition.operator, condition.value)
-            )
-          )
-        else
-          query.whereIn(from_key, () ->
-            this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, () ->
-              this.select('id').from(to_table)[condition.method](condition.key, condition.value)
-            )
-          )
+        if (condition.operator) {
+          query.whereIn(from_key, function() {
+            return this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, function() {
+              return this.select('id').from(to_table)[condition.method](condition.key, condition.operator, condition.value);
+            });
+          });
+        } else {
+          query.whereIn(from_key, function() {
+            return this.select(pivot_to_key).from(pivot_table).whereIn(pivot_from_key, function() {
+              return this.select('id').from(to_table)[condition.method](condition.key, condition.value);
+            });
+          });
+        }
 
-      else
-        appendRelatedWhere(query, condition, options)
+      } else {
+        appendRelatedWhere(query, condition, options);
+      }
 
-    else
-      if condition.operator
-        query[condition.method](condition.key, condition.operator, condition.value)
-      else
-        query[condition.method](condition.key, condition.value)
+    } else {
+      if (condition.operator) {
+        query[condition.method](condition.key, condition.operator, condition.value);
+      } else {
+        query[condition.method](condition.key, condition.value);
+      }
+    }
 
-  else if condition.conditions?.length
-    query[condition.method] ->
-      sub_query = @
-      for c in condition.conditions
-        appendWhere(sub_query, c)
+  } else if (condition.conditions != null ? condition.conditions.length : undefined) {
+    query[condition.method](function() {
+      const sub_query = this;
+      return Array.from(condition.conditions).map((c) =>
+        appendWhere(sub_query, c));
+    });
+  }
 
-  return query
+  return query;
+};
 
-appendSelect = (query, ast) ->
-  query.select(ast.select)
-  return query
+var appendSelect = function(query, ast) {
+  query.select(ast.select);
+  return query;
+};
 
-appendSort = (query, ast) ->
-  return query unless ast.sort
-  query.orderBy(sort.column, sort.direction) for sort in ast.sort
-  return query
+var appendSort = function(query, ast) {
+  if (!ast.sort) { return query; }
+  for (let sort of Array.from(ast.sort)) { query.orderBy(sort.column, sort.direction); }
+  return query;
+};
 
-appendLimits = (query, limit, offset) ->
-  query.limit(limit) if limit
-  query.offset(offset) if offset
-  return query
+var appendLimits = function(query, limit, offset) {
+  if (limit) { query.limit(limit); }
+  if (offset) { query.offset(offset); }
+  return query;
+};

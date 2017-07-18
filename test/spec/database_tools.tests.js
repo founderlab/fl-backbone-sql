@@ -1,136 +1,194 @@
-util = require 'util'
-assert = require 'assert'
+/*
+ * decaffeinate suggestions:
+ * DS102: Remove unnecessary code created because of implicit returns
+ * DS206: Consider reworking classes to avoid initClass
+ * DS207: Consider shorter variations of null checks
+ * Full docs: https://github.com/decaffeinate/decaffeinate/blob/master/docs/suggestions.md
+ */
+let exports;
+const util = require('util');
+const assert = require('assert');
 
-BackboneORM = require 'backbone-orm'
-{_, Backbone, Queue, Utils} = BackboneORM
+const BackboneORM = require('backbone-orm');
+const {_, Backbone, Queue, Utils} = BackboneORM;
 
-_.each BackboneORM.TestUtils.optionSets(), exports = (options) ->
-  options = _.extend({}, options, __test__parameters) if __test__parameters?
-  return if options.embed
+_.each(BackboneORM.TestUtils.optionSets(), (exports = function(options) {
+  if (typeof __test__parameters !== 'undefined' && __test__parameters !== null) { options = _.extend({}, options, __test__parameters); }
+  if (options.embed) { return; }
 
-  DATABASE_URL = options.database_url or ''
-  BASE_SCHEMA = options.schema or {}
-  SYNC = options.sync
+  const DATABASE_URL = options.database_url || '';
+  const BASE_SCHEMA = options.schema || {};
+  const SYNC = options.sync;
 
-  describe "Sql db tools #{options.$parameter_tags or ''}#{options.$tags}", ->
-    Flat = Reverse = Owner = null
-    before ->
-      BackboneORM.configure {model_cache: {enabled: !!options.cache, max: 100}}
+  return describe(`Sql db tools ${options.$parameter_tags || ''}${options.$tags}`, function() {
+    let Owner, Reverse;
+    let Flat = (Reverse = (Owner = null));
+    before(function() {
+      BackboneORM.configure({model_cache: {enabled: !!options.cache, max: 100}});
 
-      class Flat extends Backbone.Model
-        urlRoot: "#{DATABASE_URL}/flats"
-        schema: _.extend BASE_SCHEMA,
-          a_string: 'String'
-        sync: SYNC(Flat)
+      Flat = class Flat extends Backbone.Model {
+        static initClass() {
+          this.prototype.urlRoot = `${DATABASE_URL}/flats`;
+          this.prototype.schema = _.extend(BASE_SCHEMA,
+            {a_string: 'String'});
+          this.prototype.sync = SYNC(Flat);
+        }
+      };
+      Flat.initClass();
 
-      class Reverse extends Backbone.Model
-        urlRoot: "#{DATABASE_URL}/reverses"
-        schema: _.defaults({
-          owner: -> ['belongsTo', Owner]
-          another_owner: -> ['belongsTo', Owner, as: 'more_reverses']
-          many_owners: -> ['hasMany', Owner, as: 'many_reverses']
-        }, BASE_SCHEMA)
-        sync: SYNC(Reverse)
+      Reverse = class Reverse extends Backbone.Model {
+        static initClass() {
+          this.prototype.urlRoot = `${DATABASE_URL}/reverses`;
+          this.prototype.schema = _.defaults({
+            owner() { return ['belongsTo', Owner]; },
+            another_owner() { return ['belongsTo', Owner, {as: 'more_reverses'}]; },
+            many_owners() { return ['hasMany', Owner, {as: 'many_reverses'}]; }
+          }, BASE_SCHEMA);
+          this.prototype.sync = SYNC(Reverse);
+        }
+      };
+      Reverse.initClass();
 
-      class Owner extends Backbone.Model
-        urlRoot: "#{DATABASE_URL}/owners"
-        schema: _.defaults({
-          a_string: 'String'
-          flats: -> ['hasMany', Flat]
-          reverses: -> ['hasMany', Reverse]
-          more_reverses: -> ['hasMany', Reverse, as: 'another_owner']
-          many_reverses: -> ['hasMany', Reverse, as: 'many_owners']
-        }, BASE_SCHEMA)
-        sync: SYNC(Owner)
+      return Owner = (function() {
+        Owner = class Owner extends Backbone.Model {
+          static initClass() {
+            this.prototype.urlRoot = `${DATABASE_URL}/owners`;
+            this.prototype.schema = _.defaults({
+              a_string: 'String',
+              flats() { return ['hasMany', Flat]; },
+              reverses() { return ['hasMany', Reverse]; },
+              more_reverses() { return ['hasMany', Reverse, {as: 'another_owner'}]; },
+              many_reverses() { return ['hasMany', Reverse, {as: 'many_owners'}]; }
+            }, BASE_SCHEMA);
+            this.prototype.sync = SYNC(Owner);
+          }
+        };
+        Owner.initClass();
+        return Owner;
+      })();
+    });
 
-    after (callback) -> Utils.resetSchemas [Flat], callback
-    beforeEach (callback) ->
-      queue = new Queue(1)
-      queue.defer (callback) -> Utils.resetSchemas [Flat], callback
-      for model_type in [Flat, Reverse, Owner]
-        do (model_type) -> queue.defer (callback) -> model_type.db().dropTableIfExists callback
-      queue.await callback
+    after(callback => Utils.resetSchemas([Flat], callback));
+    beforeEach(function(callback) {
+      const queue = new Queue(1);
+      queue.defer(callback => Utils.resetSchemas([Flat], callback));
+      for (let model_type of [Flat, Reverse, Owner]) {
+        (model_type => queue.defer(callback => model_type.db().dropTableIfExists(callback)))(model_type);
+      }
+      return queue.await(callback);
+    });
 
-    it.skip 'Can drop a models table', (done) ->
-      db = Flat.db()
-      db.resetSchema (err) ->
-        assert.ok(!err, "No errors: #{err}")
-        db.dropTable (err) ->
-          assert.ok(!err, "No errors: #{err}")
-          db.hasTable (err, has_table) ->
-            assert.ok(!err, "No errors: #{err}")
-            assert.ok(!has_table, "Table removed: #{has_table}")
-            done()
+    it.skip('Can drop a models table', function(done) {
+      const db = Flat.db();
+      return db.resetSchema(function(err) {
+        assert.ok(!err, `No errors: ${err}`);
+        return db.dropTable(function(err) {
+          assert.ok(!err, `No errors: ${err}`);
+          return db.hasTable(function(err, has_table) {
+            assert.ok(!err, `No errors: ${err}`);
+            assert.ok(!has_table, `Table removed: ${has_table}`);
+            return done();
+          });
+        });
+      });
+    });
 
-    it.skip 'Can reset a models schema', (done) ->
-      db = Flat.db()
-      db.dropTableIfExists (err) ->
-        assert.ok(!err, "No errors: #{err}")
-        db.resetSchema (err) ->
-          assert.ok(!err, "No errors: #{err}")
-          db.hasColumn 'a_string', (err, has_column) ->
-            assert.ok(!err, "No errors: #{err}")
-            assert.ok(has_column, "Has the test column: #{has_column}")
-            done()
+    it.skip('Can reset a models schema', function(done) {
+      const db = Flat.db();
+      return db.dropTableIfExists(function(err) {
+        assert.ok(!err, `No errors: ${err}`);
+        return db.resetSchema(function(err) {
+          assert.ok(!err, `No errors: ${err}`);
+          return db.hasColumn('a_string', function(err, has_column) {
+            assert.ok(!err, `No errors: ${err}`);
+            assert.ok(has_column, `Has the test column: ${has_column}`);
+            return done();
+          });
+        });
+      });
+    });
 
-    it.skip 'Can ensure a models schema', (done) ->
-      db = Flat.db()
-      db.dropTableIfExists (err) ->
-        assert.ok(!err, "No errors: #{err}")
-        db.ensureSchema (err) ->
-          assert.ok(!err, "No errors: #{err}")
-          db.hasColumn 'a_string', (err, has_column) ->
-            assert.ok(!err, "No errors: #{err}")
-            assert.ok(has_column, "Has the test column: #{has_column}")
-            done()
+    it.skip('Can ensure a models schema', function(done) {
+      const db = Flat.db();
+      return db.dropTableIfExists(function(err) {
+        assert.ok(!err, `No errors: ${err}`);
+        return db.ensureSchema(function(err) {
+          assert.ok(!err, `No errors: ${err}`);
+          return db.hasColumn('a_string', function(err, has_column) {
+            assert.ok(!err, `No errors: ${err}`);
+            assert.ok(has_column, `Has the test column: ${has_column}`);
+            return done();
+          });
+        });
+      });
+    });
 
-    it.skip 'Can add a column to the db', (done) ->
-      db = Flat.db()
-      db.createTable().addColumn('test_column', 'string').end (err) ->
-        assert.ok(!err, "No errors: #{err}")
-        db.hasColumn 'test_column', (err, has_column) ->
-          assert.ok(!err, "No errors: #{err}")
-          assert.ok(has_column, "Has the test column: #{has_column}")
-          done()
+    it.skip('Can add a column to the db', function(done) {
+      const db = Flat.db();
+      return db.createTable().addColumn('test_column', 'string').end(function(err) {
+        assert.ok(!err, `No errors: ${err}`);
+        return db.hasColumn('test_column', function(err, has_column) {
+          assert.ok(!err, `No errors: ${err}`);
+          assert.ok(has_column, `Has the test column: ${has_column}`);
+          return done();
+        });
+      });
+    });
 
-    it.skip 'Can reset a single relation', (done) ->
-      console.log 'TODO'
-      done()
+    it.skip('Can reset a single relation', function(done) {
+      console.log('TODO');
+      return done();
+    });
 
-    it 'Can ensure many to many models schemas', (done) ->
-      reverse_db = Reverse.db()
-      owner_db = Owner.db()
+    return it('Can ensure many to many models schemas', function(done) {
+      const reverse_db = Reverse.db();
+      const owner_db = Owner.db();
 
-      drop_queue = new Queue(1)
+      const drop_queue = new Queue(1);
 
-      drop_queue.defer (callback) ->
-        reverse_db.dropTableIfExists (err) ->
-          assert.ok(!err, "No errors: #{err}")
-          callback()
+      drop_queue.defer(callback =>
+        reverse_db.dropTableIfExists(function(err) {
+          assert.ok(!err, `No errors: ${err}`);
+          return callback();
+        })
+      );
 
-      drop_queue.defer (callback) ->
-        owner_db.dropTableIfExists (err) ->
-          assert.ok(!err, "No errors: #{err}")
-          callback()
+      drop_queue.defer(callback =>
+        owner_db.dropTableIfExists(function(err) {
+          assert.ok(!err, `No errors: ${err}`);
+          return callback();
+        })
+      );
 
-      drop_queue.await (err) ->
-        assert.ok(!err, "No errors: #{err}")
+      return drop_queue.await(function(err) {
+        assert.ok(!err, `No errors: ${err}`);
 
-        queue = new Queue(1)
+        const queue = new Queue(1);
 
-        queue.defer (callback) ->
-          reverse_db.ensureSchema (err) ->
-            assert.ok(!err, "No errors: #{err}")
-            callback()
+        queue.defer(callback =>
+          reverse_db.ensureSchema(function(err) {
+            assert.ok(!err, `No errors: ${err}`);
+            return callback();
+          })
+        );
 
-        queue.defer (callback) ->
-          owner_db.ensureSchema (err) ->
-            assert.ok(!err, "No errors: #{err}")
-            callback()
+        queue.defer(callback =>
+          owner_db.ensureSchema(function(err) {
+            assert.ok(!err, `No errors: ${err}`);
+            return callback();
+          })
+        );
 
-        queue.await (err) ->
-          assert.ok(!err, "No errors: #{err}")
-          owner_db.hasColumn 'a_string', (err, has_column) ->
-            assert.ok(!err, "No errors: #{err}")
-            assert.ok(has_column, "Has the test column: #{has_column}")
-            done()
+        return queue.await(function(err) {
+          assert.ok(!err, `No errors: ${err}`);
+          return owner_db.hasColumn('a_string', function(err, has_column) {
+            assert.ok(!err, `No errors: ${err}`);
+            assert.ok(has_column, `Has the test column: ${has_column}`);
+            return done();
+          });
+        });
+      });
+    });
+  });
+})
+);
