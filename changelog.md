@@ -1,5 +1,8 @@
 Please refer to the following release notes when upgrading your version of BackboneSQL.
 
+### 3.0.0
+  - Out with CoffeeScript, in with JavaScript
+
 ### 2.5.0
   - Fixed a bug with $unique which caused incorrect sql.
 

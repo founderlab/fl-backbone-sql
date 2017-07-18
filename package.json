@@ -1,6 +1,6 @@
 {
   "name": "fl-backbone-sql",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "description": "PostgreSQL, MySQL, and SQLite3 storage for BackboneORM",
   "main": "./lib/index.js",
   "license": "MIT",
@@ -34,9 +34,11 @@
   },
   "scripts": {
     "test": "gulp test-postgres",
-    "build": "coffee -o lib -c src",
-    "watch": "coffee -o lib -w src",
-    "prepublish": "gulp build"
+    "prepublish": "rm -rf ./lib && babel ./src --ignore '/node_modules/' --out-dir ./lib",
+    "build": "rm -rf ./lib && babel ./src --ignore '/node_modules/' --out-dir ./lib",
+    "watch": "rm -rf ./lib && babel ./src --ignore '/node_modules/' --watch --out-dir ./lib",
+    "test": "eval $(cat test/.env) mocha test/**/*.tests.js",
+    "cover": "eval $(cat test/.env) istanbul cover _mocha -- test/**/*.tests.js"
   },
   "devDependencies": {
     "async": "*",
@@ -55,7 +57,13 @@
     "pg": "4.x",
     "sqlite3": "3.x",
     "supertest": "0.13.x",
-    "underscore": "*"
+    "babel": "^5.8.29",
+    "babel-eslint": "^4.1.3",
+    "eslint": "^1.5.1",
+    "eslint-config-founderlab": "^0.1.0",
+    "eslint-plugin-react": "^3.4.2",
+    "expect": "^1.12.2",
+    "sinon": "^1.17.4"
   },
   "dependencies": {
     "backbone": "1.x",
