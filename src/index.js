@@ -4,19 +4,19 @@
   License: MIT (http://www.opensource.org/licenses/mit-license.php)
 */
 
-let BackboneORM, BackboneSQL;
-const {_, Backbone} = (BackboneORM = require('backbone-orm'));
+let BackboneORM, BackboneSQL
+const {_, Backbone} = (BackboneORM = require('backbone-orm'))
 
-module.exports = (BackboneSQL = require('./core')); // avoid circular dependencies
+module.exports = (BackboneSQL = require('./core')) // avoid circular dependencies
 const publish = {
   configure: require('./lib/configure'),
   sync: require('./sync'),
 
   _,
-  Backbone
-};
-publish._.extend(BackboneSQL, publish);
+  Backbone,
+}
+publish._.extend(BackboneSQL, publish)
 
 // re-expose modules
-BackboneSQL.modules = {'backbone-orm': BackboneORM};
-for (let key in BackboneORM.modules) { const value = BackboneORM.modules[key]; BackboneSQL.modules[key] = value; }
+BackboneSQL.modules = {'backbone-orm': BackboneORM}
+for (const key in BackboneORM.modules) { const value = BackboneORM.modules[key]; BackboneSQL.modules[key] = value }

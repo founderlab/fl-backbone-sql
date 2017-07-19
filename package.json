@@ -37,7 +37,6 @@
     "prepublish": "rm -rf ./lib && babel ./src --ignore '/node_modules/' --out-dir ./lib",
     "build": "rm -rf ./lib && babel ./src --ignore '/node_modules/' --out-dir ./lib",
     "watch": "rm -rf ./lib && babel ./src --ignore '/node_modules/' --watch --out-dir ./lib",
-    "test": "eval $(cat test/.env) mocha test/**/*.tests.js",
     "cover": "eval $(cat test/.env) istanbul cover _mocha -- test/**/*.tests.js"
   },
   "devDependencies": {

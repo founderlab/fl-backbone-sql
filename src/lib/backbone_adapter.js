@@ -11,48 +11,48 @@
   License: MIT (http://www.opensource.org/licenses/mit-license.php)
 */
 
-let SqlBackboneAdapter;
-const {_} = require('backbone-orm');
+let SqlBackboneAdapter
+const {_} = require('backbone-orm')
 
 module.exports = (SqlBackboneAdapter = class SqlBackboneAdapter {
   static nativeToAttributes(json, schema) {
-    let value;
+    let value
     for (var key in schema.fields) {
-      var needle;
-      value = schema.fields[key];
+      let needle
+      value = schema.fields[key]
       if (schema.fields[key] && (schema.fields[key].type === 'Boolean') && (json[key] !== null)) {
-        json[key] = !!json[key];
+        json[key] = !!json[key]
       } else if (((value.type != null ? value.type.toLowerCase() : undefined) === 'json') && json[key] && _.isString(json[key])) {
         try {
-          json[key] = JSON.parse(json[key]);
+          json[key] = JSON.parse(json[key])
         } catch (err) {}
           // console.log(err)
       } else if ((needle = value.type != null ? value.type.toLowerCase() : undefined, ['float', 'decimal'].includes(needle)) && json[key] && _.isString(json[key])) {
-        json[key] = +json[key];
+        json[key] = +json[key]
       }
     }
 
     // Make join table ids strings
     for (key in json) {
-      value = json[key];
+      value = json[key]
       if (key.endsWith('_id') && value) {
-        json[key] = value.toString();
+        json[key] = value.toString()
       }
     }
 
     // Make primary key and foreign keys strings
-    if (json.id) { json.id = json.id.toString(); }
+    if (json.id) { json.id = json.id.toString() }
     for (key in schema.relations) {
-      var foreign_key;
-      const relation = schema.relations[key];
+      let foreign_key
+      const relation = schema.relations[key]
       if (relation.type === 'belongsTo') {
-        ({ foreign_key } = relation);
+        ({ foreign_key } = relation)
       }
       if (foreign_key && json[foreign_key]) {
-        json[foreign_key] = json[foreign_key].toString();
+        json[foreign_key] = json[foreign_key].toString()
       }
     }
 
-    return json;
+    return json
   }
-});
+})

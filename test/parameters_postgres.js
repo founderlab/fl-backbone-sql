@@ -6,10 +6,10 @@ global.__test__parameters = (module.exports = {
     name: ['String', {indexed: true}],
     // TODO: json only works on the postgres backend
     json_data: 'JSON',  // for flat/cursor
-    is_base: 'Boolean'
+    is_base: 'Boolean',
   },  // for relational/self
     // test: ['String', length: 500]
   database_url: require('./config/database')['postgres'],
-  sync: require('../').sync,
-  $parameter_tags: '@postgres_sync '
-});
+  sync: require('../src').sync,
+  $parameter_tags: '@postgres_sync ',
+})

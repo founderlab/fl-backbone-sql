@@ -1,2 +1,2 @@
---compilers coffee:coffee-script/register
---timeout 10000
+--compilers js:babel/register,coffee:coffee-script/register
+--recursive
