@@ -68,7 +68,7 @@ appendRelatedWhere = (query, condition, options={}) ->
   if condition.operator
     query[in_method](from_key, () ->
       q = @
-      if condition.value
+      if !_.isUndefined(condition.value)
         this.select(select).from(table)[condition.method](condition.key, condition.operator, condition.value)
       else if condition.dot_where
         this.select(select).from(table)
@@ -78,7 +78,7 @@ appendRelatedWhere = (query, condition, options={}) ->
   else
     query[in_method](from_key, () ->
       q = @
-      if condition.value
+      if !_.isUndefined(condition.value)
         this.select(select).from(table)[condition.method](condition.key, condition.value)
       else if condition.dot_where
         this.select(select).from(table)
