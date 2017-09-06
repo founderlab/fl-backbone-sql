@@ -176,9 +176,7 @@ module.exports = class SqlAst
     if _.isObject(value) and not _.isDate(value)
 
       if value?.$in
-        unless value.$in.length
-          @abort = true
-          return condition
+        value.$in = [value.$in] unless _.isArray(value.$in)
         if @isJsonField(_key) or options.relation and @isJsonField(_key, options.model_type)
           for val in value.$in
             condition.conditions.push({
